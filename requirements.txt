@@ -1,0 +1,22 @@
+# Core dependencies for MoMo data processing
+lxml>=4.9.0
+python-dateutil>=2.8.0
+sqlite3  # Built-in with Python
+
+# Optional FastAPI for API layer
+fastapi>=0.104.0
+uvicorn>=0.24.0
+pydantic>=2.0.0
+
+# Development and testing
+pytest>=7.0.0
+pytest-cov>=4.0.0
+
+# Data processing and visualization
+pandas>=2.0.0
+numpy>=1.24.0
+matplotlib>=3.7.0
+plotly>=5.15.0
+
+# Utilities
+python-dotenv>=1.0.0

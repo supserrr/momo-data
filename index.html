@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MoMo Data Dashboard</title>
+    
+    <!-- Load Google Fonts - Jost as Futura alternative -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="web/styles.css">
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body>
+    <!-- Background Pattern -->
+    <div class="container"></div>
+    
+    <header>
+         <nav class="glass-radio-group">
+            <input type="radio" name="section" id="glass-overview" checked="" />
+            <label for="glass-overview">Overview</label>
+
+            <input type="radio" name="section" id="glass-transactions" />
+            <label for="glass-transactions">Transactions</label>
+
+            <input type="radio" name="section" id="glass-analytics" />
+            <label for="glass-analytics">Analytics</label>
+
+            <input type="radio" name="section" id="glass-reports" />
+            <label for="glass-reports">Reports</label>
+
+            <div class="glass-glider"></div>
+        </nav>
+    </header>
+
+    <main>
+        <h1 class="page-title">MoMo Data Processing Dashboard</h1>
+        <h2>System Overview</h2>
+        <div class="stats-grid">
+            <div class="stat-card columns">
+                <div class="button-container">
+                    <button class="btn green-flag">SUCCESS</button>
+                    <p class="offer">TRANSACTIONS</p>
+                </div>
+                <p class="secondary-heading">
+                    "Total MoMo payment transactions processed today."
+                </p>
+                <p class="card-description">
+                    <span id="total-transactions">1,247</span> transactions completed<br />
+                    <span class="metric-change">+12.5% from yesterday</span>
+                </p>
+            </div>
+            
+            <div class="stat-card columns">
+                <div class="button-container">
+                    <button class="btn blue-flag">REVENUE</button>
+                    <p class="offer">AMOUNT</p>
+                </div>
+                <p class="secondary-heading">
+                    "Total RWF revenue generated through payments."
+                </p>
+                <p class="card-description">
+                    <span id="total-amount">2,450,000</span> RWF collected<br />
+                    <span class="metric-change">+8.2% growth rate</span>
+                </p>
+            </div>
+            
+            <div class="stat-card columns">
+                <div class="button-container">
+                    <button class="btn orange-flag">PERFORMANCE</button>
+                    <p class="offer">SUCCESS RATE</p>
+                </div>
+                <p class="secondary-heading">
+                    "Transaction success percentage and reliability."
+                </p>
+                <p class="card-description">
+                    <span id="success-rate">98.7%</span> success rate<br />
+                    <span class="metric-change">+2.1% improvement</span>
+                </p>
+            </div>
+            
+            <div class="stat-card columns">
+                <div class="button-container">
+                    <button class="btn purple-flag">LIVE</button>
+                    <p class="offer">UPDATED</p>
+                </div>
+                <p class="secondary-heading">
+                    "Real-time data refresh and system status."
+                </p>
+                <p class="card-description">
+                    <span id="last-updated">2 min ago</span> last update<br />
+                    <span class="metric-change">Live data feed active</span>
+                </p>
+            </div>
+        </div>
+
+        <h2 id="transactions">Transaction Analysis</h2>
+        <div class="chart-container">
+            <div class="chart-header">
+                <div>
+                    <h3 class="chart-title">Daily Transaction Amounts</h3>
+                    <p class="chart-subtitle">Transaction volume over time</p>
+                </div>
+                <div class="chart-actions">
+                    <button class="chart-action-btn">Export</button>
+                    <button class="chart-action-btn">Filter</button>
+                </div>
+            </div>
+            <div class="chart-content">
+                <div id="transaction-chart"></div>
+            </div>
+        </div>
+        <div class="table-container">
+            <div class="table-header">
+                <div>
+                    <h3 class="table-title">Recent Transactions</h3>
+                    <p class="table-subtitle">Latest transaction records</p>
+                </div>
+                <div class="table-actions">
+                    <input type="text" class="table-search" placeholder="Search transactions...">
+                    <button class="chart-action-btn">Export</button>
+                </div>
+            </div>
+            <table id="transaction-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Amount (RWF)</th>
+                        <th>Type</th>
+                        <th>Status</th>
+                        <th>Phone</th>
+                    </tr>
+                </thead>
+                <tbody id="transaction-tbody">
+                    <!-- Data will be populated by JavaScript -->
+                </tbody>
+            </table>
+        </div>
+
+        <h2 id="analytics">Analytics & Insights</h2>
+        <div class="analytics-grid">
+            <div class="chart-container">
+                <div class="chart-header">
+                    <div>
+                        <h3 class="chart-title">Amount Distribution</h3>
+                        <p class="chart-subtitle">Transaction amounts by range</p>
+                    </div>
+                    <div class="chart-actions">
+                        <button class="chart-action-btn">View</button>
+                    </div>
+                </div>
+                <div class="chart-content">
+                    <div id="amount-distribution-chart"></div>
+                </div>
+            </div>
+            <div class="chart-container">
+                <div class="chart-header">
+                    <div>
+                        <h3 class="chart-title">Transaction Types</h3>
+                        <p class="chart-subtitle">Distribution by transaction type</p>
+                    </div>
+                    <div class="chart-actions">
+                        <button class="chart-action-btn">View</button>
+                    </div>
+                </div>
+                <div class="chart-content">
+                    <div id="transaction-types-chart"></div>
+                </div>
+            </div>
+        </div>
+
+        <h2 id="reports">Reports & Actions</h2>
+        <div class="report-controls">
+            <button id="export-json" class="button-74" role="button">Export JSON</button>
+            <button id="refresh-data" class="button-74" role="button">Refresh Data</button>
+            <button id="run-etl" class="button-74" role="button">Run ETL Process</button>
+        </div>
+        <div id="report-status" class="status-message"></div>
+        
+        <!-- Custom Loader -->
+        <div class="custom-loader" id="custom-loader" style="display: none;"></div>
+    </main>
+
+
+    <!-- Back to Top Button -->
+    <button class="button" id="backToTop">
+        <svg class="svgIcon" viewBox="0 0 384 512">
+            <path
+                d="M214.6 41.4c-12.5-12.5-32.8-12.5-45.3 0l-160 160c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L160 141.2V448c0 17.7 14.3 32 32 32s32-14.3 32-32V141.2L329.4 246.6c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3l-160-160z"
+            ></path>
+        </svg>
+    </button>
+
+    <script src="web/chart_handler.js"></script>
+    <script>
+        // Glass Navigation Functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            const radioButtons = document.querySelectorAll('.glass-radio-group input[type="radio"]');
+            
+            radioButtons.forEach(radio => {
+                radio.addEventListener('change', function() {
+                    if (this.checked) {
+                        const targetId = this.id.replace('glass-', '');
+                        const targetSection = document.getElementById(targetId);
+                        
+                        if (targetSection) {
+                            // Smooth scroll to the target section
+                            targetSection.scrollIntoView({
+                                behavior: 'smooth',
+                                block: 'start'
+                            });
+                        }
+                    }
+                });
+            });
+
+            // Back to Top Button Functionality
+            const backToTopButton = document.getElementById('backToTop');
+            
+            // Show/hide button based on scroll position
+            window.addEventListener('scroll', function() {
+                if (window.pageYOffset > 300) {
+                    backToTopButton.style.display = 'flex';
+                } else {
+                    backToTopButton.style.display = 'none';
+                }
+            });
+            
+            // Scroll to top when button is clicked
+            backToTopButton.addEventListener('click', function() {
+                window.scrollTo({
+                    top: 0,
+                    behavior: 'smooth'
+                });
+            });
+
+            // Custom Loader Functions
+            const customLoader = document.getElementById('custom-loader');
+            
+            function showLoader() {
+                customLoader.style.display = 'block';
+            }
+            
+            function hideLoader() {
+                customLoader.style.display = 'none';
+            }
+            
+            // Example usage for action buttons
+            const actionButtons = document.querySelectorAll('.button-74');
+            actionButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    showLoader();
+                    // Simulate loading time (replace with actual async operations)
+                    setTimeout(() => {
+                        hideLoader();
+                    }, 2000);
+                });
+            });
+        });
+    </script>
+</body>
+</html>
