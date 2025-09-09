@@ -13,10 +13,10 @@
 This project processes MoMo SMS data in XML format, cleans and categorizes it, stores it in a relational database, and provides a frontend for analysis and visualization. The system demonstrates skills in backend data processing, database management, and frontend development. All monetary values are displayed in Rwandan Francs (RWF).
 
 ## System Architecture
-[Link to architecture diagram will be added here]
+![MoMo Data Processing System Architecture](./web/assets/architecture-diagram.png)
 
 ## Scrum Board
-[Link to Scrum board will be added here]
+https://github.com/users/supserrr/projects/3/views/1?system_template=team_planning
 
 ## Setup Instructions
 1. Clone the repository
