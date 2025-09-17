@@ -14,7 +14,7 @@ from .config import DATABASE_FILE, DASHBOARD_JSON_FILE
 logger = logging.getLogger(__name__)
 
 class DatabaseLoader:
-    """Load categorized transactions into SQLite database."""
+    """Loads categorized transactions into SQLite database."""
     
     def __init__(self, db_path: Path = DATABASE_FILE):
         self.db_path = db_path
@@ -63,13 +63,15 @@ class DatabaseLoader:
                 CREATE TABLE IF NOT EXISTS transactions (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     amount REAL NOT NULL,
-                    phone TEXT NOT NULL,
+                    phone TEXT,
                     date TEXT,
                     reference TEXT,
                     type TEXT,
                     status TEXT,
                     category TEXT,
                     category_confidence REAL,
+                    personal_id TEXT,
+                    recipient_name TEXT,
                     original_data TEXT,
                     raw_data TEXT,
                     xml_tag TEXT,
@@ -119,22 +121,14 @@ class DatabaseLoader:
             """)
             
             self.connection.commit()
-            logger.info("Database tables created successfully")
+            logger.info("Database tables created")
             
         except Exception as e:
             logger.error(f"Error creating tables: {e}")
             raise
     
     def load_transactions(self, transactions: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """
-        Load transactions into database.
-        
-        Args:
-            transactions: List of categorized transaction dictionaries
-            
-        Returns:
-            Summary of loading results
-        """
+        """Load transactions into database."""
         if not self.connection:
             self.connect()
         
@@ -169,7 +163,7 @@ class DatabaseLoader:
             raise
     
     def _insert_transaction(self, cursor, transaction: Dict[str, Any]):
-        """Insert a single transaction into database."""
+        """Insert single transaction into database."""
         # Prepare data for insertion
         data = {
             'amount': transaction.get('amount'),
@@ -180,6 +174,8 @@ class DatabaseLoader:
             'status': transaction.get('status'),
             'category': transaction.get('category'),
             'category_confidence': transaction.get('category_confidence'),
+            'personal_id': transaction.get('personal_id'),
+            'recipient_name': transaction.get('recipient_name'),
             'original_data': transaction.get('original_data'),
             'raw_data': transaction.get('raw_data'),
             'xml_tag': transaction.get('xml_tag'),
@@ -189,32 +185,17 @@ class DatabaseLoader:
             'loaded_at': datetime.now().isoformat()
         }
         
-        # Check for existing transaction before inserting
-        # This handles the case where reference might be NULL
+        # Use INSERT OR IGNORE to handle duplicates
+        # The unique constraint on original_data will prevent duplicates
         cursor.execute("""
-            SELECT id FROM transactions 
-            WHERE phone = :phone 
-            AND amount = :amount 
-            AND date = :date 
-            AND (reference = :reference OR (reference IS NULL AND :reference IS NULL))
-        """, data)
-        
-        existing = cursor.fetchone()
-        if existing:
-            # Transaction already exists, skip insertion
-            logger.debug(f"Duplicate transaction skipped: {data['phone']}, {data['amount']}, {data['date']}")
-            return
-        
-        # Insert new transaction
-        cursor.execute("""
-            INSERT INTO transactions (
+            INSERT OR IGNORE INTO transactions (
                 amount, phone, date, reference, type, status, category,
-                category_confidence, original_data, raw_data, xml_tag,
-                xml_attributes, cleaned_at, categorized_at, loaded_at
+                category_confidence, personal_id, recipient_name, original_data, 
+                raw_data, xml_tag, xml_attributes, cleaned_at, categorized_at, loaded_at
             ) VALUES (
                 :amount, :phone, :date, :reference, :type, :status, :category,
-                :category_confidence, :original_data, :raw_data, :xml_tag,
-                :xml_attributes, :cleaned_at, :categorized_at, :loaded_at
+                :category_confidence, :personal_id, :recipient_name, :original_data, 
+                :raw_data, :xml_tag, :xml_attributes, :cleaned_at, :categorized_at, :loaded_at
             )
         """, data)
     
@@ -245,7 +226,7 @@ class DatabaseLoader:
             logger.error(f"Error updating category stats: {e}")
     
     def _log_etl_process(self, cursor, total_records: int):
-        """Log ETL process information."""
+        """Log ETL process info."""
         try:
             log_data = {
                 'process_name': 'load_transactions',
@@ -272,12 +253,7 @@ class DatabaseLoader:
             logger.error(f"Error logging ETL process: {e}")
     
     def export_dashboard_json(self) -> Dict[str, Any]:
-        """
-        Export data for dashboard visualization.
-        
-        Returns:
-            Dashboard data dictionary
-        """
+        """Export data for dashboard visualization."""
         if not self.connection:
             self.connect()
         
@@ -368,7 +344,7 @@ class DatabaseLoader:
             raise
     
     def get_loading_summary(self) -> Dict[str, Any]:
-        """Get summary of loading results."""
+        """Get loading summary stats."""
         return {
             'total_processed': self.loaded_count + self.error_count,
             'successfully_loaded': self.loaded_count,
@@ -379,7 +355,7 @@ class DatabaseLoader:
         }
     
     def get_database_stats(self) -> Dict[str, Any]:
-        """Get database statistics."""
+        """Get database stats."""
         if not self.connection:
             self.connect()
         

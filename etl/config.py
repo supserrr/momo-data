@@ -35,6 +35,8 @@ TRANSACTION_CATEGORIES = {
     'WITHDRAWAL': ['withdraw', 'debit', 'cashout', 'send'],
     'TRANSFER': ['transfer', 'send_money', 'mobile_money'],
     'PAYMENT': ['payment', 'bill', 'utility', 'merchant'],
+    'DATA_BUNDLE': ['data bundle', 'data_bundle', 'bundle', 'internet', 'data', 'mtn data', 'yello', '*164*'],
+    'AIRTIME': ['airtime', 'credit', 'topup', 'recharge'],
     'QUERY': ['balance', 'statement', 'inquiry'],
     'OTHER': ['other', 'unknown', 'misc']
 }

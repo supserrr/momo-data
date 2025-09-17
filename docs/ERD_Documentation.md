@@ -2,40 +2,39 @@
 
 ## Design Overview
 
-For our MoMo SMS data processing system, we designed a database around five core entities that capture the complete transaction lifecycle and system monitoring requirements. Our design prioritizes data integrity, query performance, and scalability while maintaining flexibility for future enhancements.
+For our MoMo SMS data processing system, we implemented a simplified database schema optimized for rapid development and straightforward data processing. Our design prioritizes ease of implementation and maintenance while providing sufficient structure for transaction processing and analytics.
 
 ## Core Entities and Relationships
 
-### 1. Users (1:M with Transactions)
-We designed the **Users** entity as the central hub for all customer information, storing both sender and receiver data. This approach eliminates data redundancy by maintaining a single user record that can participate in multiple transactions. We included comprehensive user statistics (total transactions, amounts sent/received) to support real-time analytics without complex aggregations.
+### 1. Transactions (Central Entity)
+The **Transactions** entity is the heart of our system, capturing all transaction details in a flat, denormalized structure. This approach simplifies data access and processing while maintaining all necessary transaction information. The table includes comprehensive transaction metadata, processing timestamps, and categorization data.
 
-### 2. Transaction_Categories (1:M with Transactions)
-The **Transaction_Categories** entity provides a flexible categorization system that can evolve with business requirements. We used a normalized approach that allows for easy addition of new transaction types and supports rule-based categorization logic. The many-to-one relationship with transactions enables efficient filtering and reporting by transaction type.
+### 2. ETL_Logs (Process Tracking)
+The **ETL_Logs** entity tracks ETL process execution and performance metrics. This table provides comprehensive audit trails for data processing operations, including success/failure rates, processing times, and error messages.
 
-### 3. Transactions (Central Entity)
-The **Transactions** entity is the heart of our system, capturing all transaction details with full audit trails. Our design includes both sender and receiver foreign keys to the Users table, supporting bidirectional transaction queries. We used JSON fields for `xml_attributes` and `processing_metadata` to provide flexibility for storing variable transaction data without schema changes.
+### 3. Category_Stats (Aggregated Analytics)
+The **Category_Stats** entity implements a denormalized approach for performance optimization. By pre-calculating category-level statistics, our system can deliver real-time dashboard performance without expensive aggregations on large transaction datasets.
 
-### 4. System_Logs (Independent Entity)
-The **System_Logs** entity operates independently to track ETL processes and system health. We separated this to ensure that logging doesn't impact transaction performance while providing comprehensive audit trails for data processing operations.
-
-### 5. Transaction_Statistics (Aggregated Data)
-The **Transaction_Statistics** entity implements a denormalized approach for performance optimization. By pre-calculating common analytics queries, our system can deliver real-time dashboard performance without expensive aggregations on large transaction datasets.
+### 4. Transactions_Backup (Data Preservation)
+The **Transactions_Backup** entity serves as a backup and migration table, preserving historical transaction data during system updates and providing data recovery capabilities.
 
 ## Design Decisions
 
-**Normalization Strategy**: Our design follows 3NF principles while strategically denormalizing the statistics table for performance. This hybrid approach balances data integrity with query efficiency.
+**Simplified Schema Strategy**: Our design prioritizes simplicity and rapid development over complex normalization. This flat structure approach reduces complexity while maintaining all necessary functionality for transaction processing and analytics.
 
-**Relationship Cardinality**: We used appropriate cardinalities (1:M, M:N) with proper foreign key constraints. Our design includes several many-to-many relationships:
+**Data Storage Approach**: We use a denormalized structure that stores all transaction data in a single table, including:
+- Core transaction fields (amount, phone, date, reference, type, status)
+- Categorization data (category, category_confidence)
+- User information (personal_id, recipient_name)
+- Processing metadata (original_data, raw_data, xml_tag, xml_attributes)
+- Timestamps (cleaned_at, categorized_at, loaded_at)
 
-- **Users ↔ Transactions (M:N)**: A user can participate in many transactions as sender or receiver, and each transaction involves multiple users. This M:N relationship is resolved through foreign keys (`sender_user_id`, `receiver_user_id`) in the transactions table.
-- **Users ↔ Categories (M:N through Transactions)**: Users can have transactions in multiple categories, and categories can involve multiple users. This indirect M:N relationship is resolved through the transactions table as a junction table.
+**Performance Optimization**: We implemented strategic indexing on frequently queried columns (phone, date, category, amount) to ensure efficient data access. A unique index on original_data prevents duplicate processing.
 
-This approach avoids unnecessary junction tables while maintaining proper normalization and referential integrity.
+**Data Integrity**: We use application-level validation and constraints rather than database-level foreign keys, providing flexibility while maintaining data quality through our ETL pipeline.
 
-**Performance Optimization**: We implemented strategic indexing on frequently queried columns (transaction_date, user_id, status) to ensure sub-second response times even with large datasets. Composite indexes support complex analytical queries.
+**Scalability**: Our design supports easy data migration and backup through the transactions_backup table, while the flat structure allows for straightforward horizontal scaling and data partitioning.
 
-**Data Integrity**: We added comprehensive CHECK constraints to validate data quality at the database level, while triggers maintain referential integrity and automatically update user statistics.
+**ETL Process Integration**: The schema is designed to work seamlessly with our ETL pipeline, with dedicated logging and statistics tables that support real-time monitoring and analytics.
 
-**Scalability**: Our design supports horizontal scaling through sharding strategies and includes JSON fields for flexible metadata storage without schema migrations.
-
-This database design provides a robust foundation for our MoMo SMS processing system while maintaining the flexibility to adapt to evolving business requirements and data volumes.
+This simplified database design provides an efficient foundation for our MoMo SMS processing system while maintaining the flexibility to evolve with changing requirements.

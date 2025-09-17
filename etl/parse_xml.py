@@ -5,49 +5,60 @@ Team 11 - Enterprise Web Development
 
 import xml.etree.ElementTree as ET
 import logging
+import re
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 from datetime import datetime
+from .config import XML_INPUT_FILE
 
 logger = logging.getLogger(__name__)
 
 class XMLParser:
-    """Parser for MoMo XML transaction data."""
+    """Parses XML files with MoMo SMS transaction data."""
     
-    def __init__(self, xml_file_path: Path):
-        self.xml_file_path = xml_file_path
+    def __init__(self, xml_file: Path = XML_INPUT_FILE):
+        """Initialize XML parser with file path."""
+        self.xml_file = Path(xml_file)
+        self.parsed_count = 0
+        self.error_count = 0
+        self.errors = []
         self.transactions = []
-        
+    
     def parse(self) -> List[Dict[str, Any]]:
-        """
-        Parse XML file and extract transaction data.
+        """Parse XML file and extract transaction data."""
+        if not self.xml_file.exists():
+            logger.error(f"XML file not found: {self.xml_file}")
+            raise FileNotFoundError(f"XML file not found: {self.xml_file}")
         
-        Returns:
-            List of transaction dictionaries
-        """
         try:
-            if not self.xml_file_path.exists():
-                raise FileNotFoundError(f"XML file not found: {self.xml_file_path}")
-                
-            logger.info(f"Parsing XML file: {self.xml_file_path}")
+            logger.info(f"Parsing XML file: {self.xml_file}")
             
             # Parse XML file
-            tree = ET.parse(self.xml_file_path)
+            tree = ET.parse(self.xml_file)
             root = tree.getroot()
             
-            # Extract transactions based on XML structure
-            # This parser is specifically designed for SMS backup XML files
-            transactions = []
+            # Extract SMS elements
+            sms_elements = root.findall('.//sms')
+            logger.info(f"Found {len(sms_elements)} SMS elements")
             
-            # Look for SMS elements that contain mobile money transactions
-            for sms_elem in root.findall('.//sms'):
-                transaction = self._extract_sms_transaction(sms_elem)
-                if transaction:
-                    transactions.append(transaction)
+            # Process each SMS
+            for i, sms in enumerate(sms_elements):
+                try:
+                    transaction = self._parse_sms_element(sms, i)
+                    if transaction:
+                        self.transactions.append(transaction)
+                        self.parsed_count += 1
+                    else:
+                        self.error_count += 1
+                        self.errors.append(f"SMS {i}: Failed to parse")
+                except Exception as e:
+                    self.error_count += 1
+                    error_msg = f"SMS {i}: {str(e)}"
+                    self.errors.append(error_msg)
+                    logger.error(error_msg)
             
-            logger.info(f"Successfully parsed {len(transactions)} transactions")
-            self.transactions = transactions
-            return transactions
+            logger.info(f"Parsed {self.parsed_count} transactions, {self.error_count} errors")
+            return self.transactions
             
         except ET.ParseError as e:
             logger.error(f"XML parsing error: {e}")
@@ -56,353 +67,339 @@ class XMLParser:
             logger.error(f"Error parsing XML file: {e}")
             raise
     
-    def _is_transaction_element(self, element) -> bool:
-        """Check if element represents a transaction."""
-        # Look for common transaction indicators
-        transaction_indicators = ['amount', 'phone', 'date', 'time', 'reference', 'id']
-        text_content = element.text or ''
-        tag_name = element.tag.lower()
-        
-        return (
-            any(indicator in tag_name for indicator in transaction_indicators) or
-            any(indicator in text_content.lower() for indicator in transaction_indicators)
-        )
-    
-    def _extract_sms_transaction(self, sms_elem) -> Optional[Dict[str, Any]]:
-        """Extract transaction data from SMS element."""
+    def _parse_sms_element(self, sms: ET.Element, index: int) -> Optional[Dict[str, Any]]:
+        """Parse individual SMS element and return transaction data."""
         try:
-            # Get SMS attributes
-            body = sms_elem.get('body', '')
-            date = sms_elem.get('date', '')
-            readable_date = sms_elem.get('readable_date', '')
-            address = sms_elem.get('address', '')
+            # Extract basic SMS attributes
+            body = sms.get('body', '')
+            address = sms.get('address', '')
+            date = sms.get('date', '')
+            readable_date = sms.get('readable_date', '')
             
-            # Only process SMS from M-Money (mobile money service)
-            if 'M-Money' not in address and 'mobile' not in body.lower():
+            # Skip if not a MoMo SMS
+            if not self._is_momo_sms(body, address):
                 return None
             
-            # Parse the SMS body for transaction information
-            transaction = self._parse_sms_body(body)
-            
-            if not transaction:
+            # Parse transaction data from SMS body
+            transaction_data = self._extract_transaction_data(body)
+            if not transaction_data:
                 return None
             
-            # Add SMS metadata
-            transaction['raw_data'] = body
-            transaction['xml_tag'] = 'sms'
-            transaction['xml_attributes'] = dict(sms_elem.attrib)
-            transaction['original_data'] = body
+            # Create transaction record
+            transaction = {
+                'amount': transaction_data.get('amount'),
+                'phone': transaction_data.get('phone'),
+                'date': self._parse_date(date, readable_date),
+                'reference': transaction_data.get('reference'),
+                'type': transaction_data.get('type'),
+                'status': transaction_data.get('status'),
+                'recipient_name': transaction_data.get('recipient_name'),
+                'personal_id': transaction_data.get('personal_id'),
+                'original_data': body,
+                'raw_data': body,
+                'xml_tag': 'sms',
+                'xml_attributes': {
+                    'address': address,
+                    'date': date,
+                    'readable_date': readable_date,
+                    'protocol': sms.get('protocol'),
+                    'type': sms.get('type'),
+                    'status': sms.get('status')
+                },
+                'parsed_at': datetime.now().isoformat()
+            }
             
-            # Parse date from SMS attributes
-            if date:
-                try:
-                    # Convert Unix timestamp to ISO format
-                    timestamp = int(date) / 1000  # Convert from milliseconds
-                    parsed_date = datetime.fromtimestamp(timestamp)
-                    transaction['date'] = parsed_date.isoformat()
-                except (ValueError, OSError):
-                    transaction['date'] = readable_date
+            return transaction
             
-            # Validate transaction
-            if self._validate_transaction(transaction):
-                return transaction
-            else:
-                logger.warning(f"Invalid SMS transaction: {transaction}")
-                return None
-                
         except Exception as e:
-            logger.error(f"Error extracting SMS transaction: {e}")
+            logger.error(f"Error parsing SMS element {index}: {e}")
             return None
-
-    def _parse_sms_body(self, body: str) -> Optional[Dict[str, Any]]:
-        """Parse SMS body to extract transaction information."""
-        if not body:
-            return None
+    
+    def _is_momo_sms(self, body: str, address: str) -> bool:
+        """Check if SMS is a MoMo transaction."""
+        # Check address
+        momo_addresses = ['M-Money', 'MTN', 'MoMo', 'Mobile Money']
+        if any(addr.lower() in address.lower() for addr in momo_addresses):
+            return True
         
-        import re
-        
-        transaction = {}
-        
-        # Amount patterns (RWF currency) - try multiple patterns
-        amount_patterns = [
-            # Patterns for *165*S* format (transfers)
-            r'\*165\*S\*(\d{1,3}(?:,\d{3})*)\s*RWF',  # *165*S*4000 RWF
-            r'\*165\*S\*(\d+)\s*RWF',  # *165*S*4000 RWF (no commas)
-            
-            # Patterns for *113*R* format (deposits)
-            r'\*113\*R\*.*?deposit of\s+(\d{1,3}(?:,\d{3})*)\s*RWF',  # *113*R*A bank deposit of 20000 RWF
-            r'\*113\*R\*.*?deposit of\s+(\d+)\s*RWF',  # *113*R*A bank deposit of 20000 RWF (no commas)
-            
-            # Patterns for *162* format (payments)
-            r'\*162\*.*?payment of\s+(\d{1,3}(?:,\d{3})*)\s*RWF',  # *162*TxId:...*S*Your payment of 3000 RWF
-            r'\*162\*.*?payment of\s+(\d+)\s*RWF',  # *162*TxId:...*S*Your payment of 3000 RWF (no commas)
-            
-            # Patterns for *164* format (data bundles)
-            r'\*164\*.*?transaction of\s+(\d{1,3}(?:,\d{3})*)\s*RWF',  # *164*S*Y'ello,A transaction of 10000 RWF
-            r'\*164\*.*?transaction of\s+(\d+)\s*RWF',  # *164*S*Y'ello,A transaction of 10000 RWF (no commas)
-            
-            # General patterns - more comprehensive
-            r'received\s+(\d{1,3}(?:,\d{3})*)\s*RWF',  # received 2000 RWF
-            r'payment of\s+(\d{1,3}(?:,\d{3})*)\s*RWF',  # payment of 1,000 RWF
-            r'transferred\s+(\d{1,3}(?:,\d{3})*)\s*RWF',  # transferred 1000 RWF
-            r'deposit of\s+(\d{1,3}(?:,\d{3})*)\s*RWF',  # deposit of 40000 RWF
-            r'withdrawn\s+(\d{1,3}(?:,\d{3})*)\s*RWF',  # withdrawn 20000 RWF
-            r'You have received\s+(\d{1,3}(?:,\d{3})*)\s*RWF',  # You have received 2000 RWF
-            r'You have transferred\s+(\d{1,3}(?:,\d{3})*)\s*RWF',  # You have transferred 10000 RWF
-            r'Your payment of\s+(\d{1,3}(?:,\d{3})*)\s*RWF',  # Your payment of 8000 RWF
-            r'with\s+(\d{1,3}(?:,\d{3})*)\s*RWF',  # with 3000 RWF (for reversals)
-            r'amount\s+(\d{1,3}(?:,\d{3})*)\s*RWF',  # amount 5000 RWF
-            r'DEPOSIT\s+RWF\s+(\d{1,3}(?:,\d{3})*)',  # DEPOSIT RWF 25000
-            r'(\d{1,3}(?:,\d{3})*)\s*RWF',  # 1,000 RWF (general)
-            r'(\d+)\s*RWF',  # 1000 RWF (general, no commas)
+        # Check body content
+        momo_keywords = [
+            'RWF', 'UGX', 'deposit', 'withdraw', 'transfer', 'payment',
+            'balance', 'mobile money', 'momo', 'transaction', 'TxId',
+            'received', 'sent', 'completed', 'fee', 'new balance'
         ]
         
-        for pattern in amount_patterns:
-            match = re.search(pattern, body)
-            if match:
-                try:
-                    amount = float(match.group(1).replace(',', ''))
-                    transaction['amount'] = amount
-                    break
-                except ValueError:
-                    continue
-        
-        # Phone number patterns
-        phone_patterns = [
-            r'(\+?250\d{9})',  # +250XXXXXXXXX
-            r'(\+?256\d{9})',  # +256XXXXXXXXX
-            r'(\d{9})',        # XXXXXXXXX
-        ]
-        
-        for pattern in phone_patterns:
-            match = re.search(pattern, body)
-            if match:
-                phone = match.group(1)
-                # Normalize phone number
-                if phone.startswith('250'):
-                    phone = '+' + phone
-                elif phone.startswith('256'):
-                    phone = '+' + phone
-                elif len(phone) == 9:
-                    phone = '+250' + phone
-                transaction['phone'] = phone
-                break
-        
-        # Transaction type detection
-        if 'received' in body.lower() and 'from' in body.lower():
-            transaction['type'] = 'DEPOSIT'
-            transaction['status'] = 'SUCCESS'
-        elif 'payment of' in body.lower() and 'to' in body.lower():
-            if 'airtime' in body.lower():
-                transaction['type'] = 'AIRTIME'
-            else:
-                transaction['type'] = 'PAYMENT'
-            transaction['status'] = 'SUCCESS'
-        elif 'transferred to' in body.lower():
-            transaction['type'] = 'TRANSFER'
-            transaction['status'] = 'SUCCESS'
-        elif 'bank deposit' in body.lower():
-            transaction['type'] = 'DEPOSIT'
-            transaction['status'] = 'SUCCESS'
-        elif 'withdrawal' in body.lower() or 'withdraw' in body.lower():
-            transaction['type'] = 'WITHDRAWAL'
-            transaction['status'] = 'SUCCESS'
-        else:
-            transaction['type'] = 'UNKNOWN'
-            transaction['status'] = 'SUCCESS'
-        
-        # Extract fee
-        fee_match = re.search(r'Fee was[:\s]*(\d+)\s*RWF', body)
-        if fee_match:
-            transaction['fee'] = float(fee_match.group(1))
-        
-        # Extract balance
-        balance_match = re.search(r'balance[:\s]*(\d{1,3}(?:,\d{3})*)\s*RWF', body, re.IGNORECASE)
-        if balance_match:
-            transaction['balance'] = float(balance_match.group(1).replace(',', ''))
-        
-        # Extract transaction ID
-        txid_match = re.search(r'TxId[:\s]*(\d+)', body)
-        if txid_match:
-            transaction['reference'] = txid_match.group(1)
-        
-        # Check for failed transactions
-        if any(word in body.lower() for word in ['failed', 'error', 'unsuccessful', 'declined']):
-            transaction['status'] = 'FAILED'
-        
-        return transaction
-
-    def _extract_transaction(self, element) -> Optional[Dict[str, Any]]:
-        """Extract transaction data from XML element."""
+        body_lower = body.lower()
+        return any(keyword.lower() in body_lower for keyword in momo_keywords)
+    
+    def _extract_transaction_data(self, body: str) -> Optional[Dict[str, Any]]:
+        """Extract transaction data from SMS body."""
         try:
-            transaction = {}
+            data = {}
             
-            # Store raw data for debugging and analysis
-            transaction['raw_data'] = self._get_element_text(element)
-            transaction['xml_tag'] = element.tag
-            transaction['xml_attributes'] = dict(element.attrib)
-            
-            # Try to extract structured data
-            for child in element:
-                tag_name = child.tag.lower()
-                text_value = self._get_element_text(child)
-                
-                if text_value:
-                    # Map common field names
-                    if 'amount' in tag_name or 'value' in tag_name:
-                        transaction['amount'] = self._parse_amount(text_value)
-                    elif 'phone' in tag_name or 'mobile' in tag_name or 'msisdn' in tag_name:
-                        transaction['phone'] = self._parse_phone(text_value)
-                    elif 'date' in tag_name or 'time' in tag_name or 'timestamp' in tag_name:
-                        transaction['date'] = self._parse_date(text_value)
-                    elif 'reference' in tag_name or 'ref' in tag_name or 'id' in tag_name:
-                        transaction['reference'] = text_value
-                    elif 'type' in tag_name or 'category' in tag_name:
-                        transaction['type'] = text_value
-                    elif 'status' in tag_name or 'result' in tag_name:
-                        transaction['status'] = text_value
-                    else:
-                        # Store other fields with original tag name
-                        transaction[tag_name] = text_value
-            
-            # If no structured data found, try to parse from text content
-            if len(transaction) <= 3:  # Only has raw_data, xml_tag, xml_attributes
-                parsed_data = self._parse_unstructured_text(transaction['raw_data'])
-                transaction.update(parsed_data)
-            
-            # Validate transaction has minimum required fields
-            if self._validate_transaction(transaction):
-                return transaction
-            else:
-                logger.warning(f"Invalid transaction data: {transaction}")
+            # Extract amount
+            amount = self._extract_amount(body)
+            if amount is None:
                 return None
-                
+            data['amount'] = amount
+            
+            # Extract phone number
+            phone = self._extract_phone(body)
+            data['phone'] = phone
+            
+            # Extract reference/transaction ID
+            reference = self._extract_reference(body)
+            data['reference'] = reference
+            
+            # Determine transaction type
+            transaction_type = self._determine_transaction_type(body)
+            data['type'] = transaction_type
+            
+            # Determine status
+            status = self._determine_status(body)
+            data['status'] = status
+            
+            # Extract recipient name
+            recipient_name = self._extract_recipient_name(body)
+            data['recipient_name'] = recipient_name
+            
+            # Extract personal ID
+            personal_id = self._extract_personal_id(body)
+            data['personal_id'] = personal_id
+            
+            return data
+            
         except Exception as e:
-            logger.error(f"Error extracting transaction from element: {e}")
+            logger.error(f"Error extracting transaction data: {e}")
             return None
     
-    def _get_element_text(self, element) -> str:
-        """Get text content from XML element."""
-        if element.text:
-            return element.text.strip()
-        return ''
-    
-    def _parse_amount(self, amount_str: str) -> Optional[float]:
-        """Parse amount from string."""
+    def _extract_amount(self, body: str) -> Optional[float]:
+        """Extract amount from SMS text."""
         try:
-            # Remove common currency symbols and whitespace
-            cleaned = amount_str.replace('UGX', '').replace('$', '').replace(',', '').strip()
-            return float(cleaned)
+            # Look for amount patterns - more comprehensive patterns
+            amount_patterns = [
+                # Standard RWF/UGX patterns
+                r'(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)\s*RWF',
+                r'(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)\s*UGX',
+                r'(\d+(?:\.\d{2})?)\s*RWF',
+                r'(\d+(?:\.\d{2})?)\s*UGX',
+                
+                # Payment patterns
+                r'payment of\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)',
+                r'Your payment of\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)',
+                r'paid\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)',
+                
+                # Transfer patterns
+                r'transferred\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)',
+                r'transfer of\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)',
+                r'(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)\s*RWF transferred',
+                
+                # Deposit patterns
+                r'deposit of\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)',
+                r'received\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)',
+                r'(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)\s*RWF has been added',
+                
+                # Balance patterns (for queries)
+                r'balance:\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)',
+                r'new balance:\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)',
+                r'NEW BALANCE\s*:\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)',
+                
+                # Fee patterns
+                r'Fee was\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)',
+                r'fee\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)',
+                
+                # General number patterns (fallback)
+                r'(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)\s*RWF',
+                r'(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)\s*UGX'
+            ]
+            
+            for pattern in amount_patterns:
+                match = re.search(pattern, body, re.IGNORECASE)
+                if match:
+                    amount_str = match.group(1).replace(',', '')
+                    amount = float(amount_str)
+                    # Only return if amount is reasonable (not 0 or negative)
+                    if amount > 0:
+                        return amount
+            
+            return None
+            
         except (ValueError, AttributeError):
             return None
     
-    def _parse_phone(self, phone_str: str) -> Optional[str]:
-        """Parse and normalize phone number."""
-        if not phone_str:
-            return None
-        
-        # Remove common separators
-        cleaned = phone_str.replace('-', '').replace(' ', '').replace('(', '').replace(')', '')
-        
-        # Basic validation
-        if len(cleaned) >= 10:
-            return cleaned
-        return None
-    
-    def _parse_date(self, date_str: str) -> Optional[str]:
-        """Parse date from string."""
-        if not date_str:
-            return None
-        
-        # Try common date formats
-        from dateutil import parser
-        
+    def _extract_phone(self, body: str) -> Optional[str]:
+        """Extract phone number from SMS text."""
         try:
-            parsed_date = parser.parse(date_str)
-            return parsed_date.isoformat()
-        except:
-            return date_str  # Return as-is if parsing fails
+            # Phone number patterns
+            phone_patterns = [
+                r'(\+?25[06]\d{9})',
+                r'(\+?25[06]\d{8})',
+                r'(0\d{9})',
+                r'(\d{9,10})'
+            ]
+            
+            for pattern in phone_patterns:
+                match = re.search(pattern, body)
+                if match:
+                    phone = match.group(1)
+                    # Normalize phone number
+                    if phone.startswith('0'):
+                        return '+250' + phone[1:]
+                    elif phone.startswith('250'):
+                        return '+' + phone
+                    elif phone.startswith('256'):
+                        return '+' + phone  # Keep Uganda numbers as-is
+                    else:
+                        return phone
+            
+            return None
+            
+        except Exception:
+            return None
     
-    def _parse_unstructured_text(self, text: str) -> Dict[str, Any]:
-        """Parse unstructured text for transaction data."""
-        parsed = {}
-        
-        if not text:
-            return parsed
-        
-        # Simple regex patterns for common data
-        import re
-        
-        # Amount patterns
-        amount_patterns = [
-            r'(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)',  # 1,000.00
-            r'(\d+(?:\.\d{2})?)',  # 1000.00
-        ]
-        
-        for pattern in amount_patterns:
-            matches = re.findall(pattern, text)
-            if matches:
-                try:
-                    amount = float(matches[0].replace(',', ''))
-                    if 100 <= amount <= 10000000:  # Reasonable amount range
-                        parsed['amount'] = amount
-                        break
-                except ValueError:
-                    continue
-        
-        # Phone patterns
-        phone_patterns = [
-            r'(\+?256\d{9})',  # +256XXXXXXXXX
-            r'(0\d{9})',       # 0XXXXXXXXX
-        ]
-        
-        for pattern in phone_patterns:
-            match = re.search(pattern, text)
-            if match:
-                parsed['phone'] = match.group(1)
-                break
-        
-        # Date patterns
-        date_patterns = [
-            r'(\d{4}-\d{2}-\d{2})',  # YYYY-MM-DD
-            r'(\d{2}/\d{2}/\d{4})',  # DD/MM/YYYY
-            r'(\d{2}-\d{2}-\d{4})',  # DD-MM-YYYY
-        ]
-        
-        for pattern in date_patterns:
-            match = re.search(pattern, text)
-            if match:
-                parsed['date'] = match.group(1)
-                break
-        
-        return parsed
+    def _extract_reference(self, body: str) -> Optional[str]:
+        """Extract transaction reference from SMS text."""
+        try:
+            # Reference patterns
+            ref_patterns = [
+                r'TxId:\s*(\d+)',
+                r'Transaction Id:\s*(\d+)',
+                r'Financial Transaction Id:\s*(\d+)',
+                r'External Transaction Id:\s*(\d+)',
+                r'ID:\s*(\d+)',
+                r'Ref:\s*(\w+)',
+                r'Reference:\s*(\w+)',
+                r'Financial Transaction Id:\s*(\w+)',
+                r'Transaction Id:\s*(\w+)'
+            ]
+            
+            for pattern in ref_patterns:
+                match = re.search(pattern, body, re.IGNORECASE)
+                if match:
+                    return match.group(1)
+            
+            return None
+            
+        except Exception:
+            return None
     
-    def _validate_transaction(self, transaction: Dict[str, Any]) -> bool:
-        """Validate transaction has minimum required fields."""
-        required_fields = ['amount', 'phone']
+    def _determine_transaction_type(self, body: str) -> str:
+        """Determine transaction type from SMS text."""
+        body_lower = body.lower()
         
-        for field in required_fields:
-            if field not in transaction or transaction[field] is None:
-                return False
+        if any(word in body_lower for word in ['deposit', 'received', 'added to your account']):
+            return 'DEPOSIT'
+        elif any(word in body_lower for word in ['withdraw', 'cashout', 'withdrawn']):
+            return 'WITHDRAWAL'
+        elif any(word in body_lower for word in ['transfer', 'transferred']):
+            return 'TRANSFER'
+        elif any(word in body_lower for word in ['payment', 'paid', 'bill']):
+            return 'PAYMENT'
+        elif any(word in body_lower for word in ['balance', 'query', 'statement']):
+            return 'QUERY'
+        elif any(word in body_lower for word in ['airtime', 'credit', 'topup']):
+            return 'AIRTIME'
+        elif any(word in body_lower for word in ['data bundle', 'data_bundle', 'internet']):
+            return 'DATA_BUNDLE'
+        else:
+            return 'OTHER'
+    
+    def _determine_status(self, body: str) -> str:
+        """Determine transaction status from SMS text."""
+        body_lower = body.lower()
         
-        # Validate amount range
-        amount = transaction.get('amount')
-        if not isinstance(amount, (int, float)) or amount <= 0:
-            return False
-        
-        # Validate phone number
-        phone = transaction.get('phone')
-        if not isinstance(phone, str) or len(phone) < 10:
-            return False
-        
-        return True
+        if any(word in body_lower for word in ['completed', 'successful', 'success']):
+            return 'SUCCESS'
+        elif any(word in body_lower for word in ['failed', 'error', 'unsuccessful']):
+            return 'FAILED'
+        elif any(word in body_lower for word in ['pending', 'processing']):
+            return 'PENDING'
+        else:
+            return 'SUCCESS'  # Default to success for MoMo SMS
+    
+    def _extract_recipient_name(self, body: str) -> Optional[str]:
+        """Extract recipient name from SMS text."""
+        try:
+            # Recipient name patterns
+            name_patterns = [
+                r'transferred to\s+([^(]+?)\s*\(',
+                r'payment to\s+([^(]+?)\s*\(',
+                r'received from\s+([^(]+?)\s*\(',
+                r'from\s+([^(]+?)\s*\(',
+                r'to\s+([^(]+?)\s*\('
+            ]
+            
+            for pattern in name_patterns:
+                match = re.search(pattern, body, re.IGNORECASE)
+                if match:
+                    name = match.group(1).strip()
+                    # Clean up name
+                    name = re.sub(r'\d+', '', name).strip()
+                    if name and len(name) > 1:
+                        return name
+            
+            return None
+            
+        except Exception:
+            return None
+    
+    def _extract_personal_id(self, body: str) -> Optional[str]:
+        """Extract personal ID from SMS text."""
+        try:
+            # Personal ID patterns
+            id_patterns = [
+                r'from\s+(\d+)',
+                r'to\s+(\d+)',
+                r'\((\d+)\)',
+                r'ID:\s*(\d+)',
+                r'Account:\s*(\d+)'
+            ]
+            
+            for pattern in id_patterns:
+                match = re.search(pattern, body, re.IGNORECASE)
+                if match:
+                    return match.group(1)
+            
+            return None
+            
+        except Exception:
+            return None
+    
+    def _parse_date(self, timestamp: str, readable_date: str) -> Optional[str]:
+        """Parse date from timestamp or readable date string."""
+        try:
+            if timestamp:
+                # Convert Unix timestamp to ISO format
+                timestamp_int = int(timestamp)
+                dt = datetime.fromtimestamp(timestamp_int / 1000)  # Convert from milliseconds
+                return dt.isoformat()
+            elif readable_date:
+                # Parse readable date
+                from dateutil import parser
+                dt = parser.parse(readable_date)
+                return dt.isoformat()
+            else:
+                return None
+                
+        except Exception as e:
+            logger.warning(f"Error parsing date: {e}")
+            return None
     
     def get_parsing_summary(self) -> Dict[str, Any]:
-        """Get summary of parsing results."""
+        """Get parsing summary stats."""
         return {
-            'total_parsed': len(self.transactions),
-            'valid_transactions': len([t for t in self.transactions if self._validate_transaction(t)]),
-            'invalid_transactions': len([t for t in self.transactions if not self._validate_transaction(t)]),
-            'xml_file': str(self.xml_file_path),
+            'total_processed': self.parsed_count + self.error_count,
+            'total_parsed': self.parsed_count,
+            'parsing_errors': self.error_count,
+            'error_rate': self.error_count / (self.parsed_count + self.error_count) if (self.parsed_count + self.error_count) > 0 else 0,
+            'errors': self.errors[:10],  # First 10 errors
             'parsed_at': datetime.now().isoformat()
         }
+    
+    def get_transaction_count(self) -> int:
+        """Get count of parsed transactions."""
+        return len(self.transactions)
+    
+    def get_errors(self) -> List[str]:
+        """Get parsing errors list."""
+        return self.errors.copy()

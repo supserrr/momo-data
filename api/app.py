@@ -38,7 +38,7 @@ app = FastAPI(
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
+    allow_origins=["*"],  # Configure for production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -47,7 +47,7 @@ app.add_middleware(
 # Initialize database manager
 db_manager = DatabaseManager()
 
-# Dependency to get database manager
+# Database dependency
 def get_db_manager():
     return db_manager
 
@@ -57,12 +57,12 @@ app.mount("/data", StaticFiles(directory="data"), name="data")
 
 @app.get("/", response_class=FileResponse)
 async def serve_frontend():
-    """Serve the main dashboard frontend."""
+    """Serve main dashboard."""
     return FileResponse("index.html")
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint."""
+    """Health check."""
     try:
         stats = db_manager.get_database_stats()
         return APIResponse(
@@ -88,7 +88,7 @@ async def get_transactions(
     phone: Optional[str] = Query(None),
     db: DatabaseManager = Depends(get_db_manager)
 ):
-    """Get transactions with optional filters."""
+    """Get transactions with filters."""
     try:
         transactions = db.get_transactions(
             limit=limit,
@@ -107,7 +107,7 @@ async def get_transaction(
     transaction_id: int,
     db: DatabaseManager = Depends(get_db_manager)
 ):
-    """Get a specific transaction by ID."""
+    """Get specific transaction by ID."""
     try:
         transaction = db.get_transaction_by_id(transaction_id)
         if not transaction:
@@ -121,7 +121,7 @@ async def get_transaction(
 
 @app.get("/api/dashboard-data", response_model=DashboardData)
 async def get_dashboard_data(db: DatabaseManager = Depends(get_db_manager)):
-    """Get dashboard summary data."""
+    """Get dashboard data."""
     try:
         data = db.get_dashboard_data()
         return DashboardData(**data)
@@ -135,7 +135,7 @@ async def get_analytics(
     end_date: Optional[str] = Query(None),
     db: DatabaseManager = Depends(get_db_manager)
 ):
-    """Get analytics data for date range."""
+    """Get analytics data."""
     try:
         data = db.get_analytics(start_date=start_date, end_date=end_date)
         return AnalyticsData(**data)
@@ -145,7 +145,7 @@ async def get_analytics(
 
 @app.get("/api/categories", response_model=List[dict])
 async def get_categories(db: DatabaseManager = Depends(get_db_manager)):
-    """Get category statistics."""
+    """Get category stats."""
     try:
         categories = db.get_category_stats()
         return categories
@@ -155,7 +155,7 @@ async def get_categories(db: DatabaseManager = Depends(get_db_manager)):
 
 @app.get("/api/monthly-transactions")
 async def get_monthly_transactions(db: DatabaseManager = Depends(get_db_manager)):
-    """Get all transactions grouped by month for volume chart."""
+    """Get monthly transactions for volume chart."""
     try:
         monthly_data = db.get_monthly_transaction_data()
         return monthly_data
@@ -169,7 +169,7 @@ async def search_transactions(
     limit: int = Query(50, ge=1, le=1000),
     db: DatabaseManager = Depends(get_db_manager)
 ):
-    """Search transactions by text query."""
+    """Search transactions by text."""
     try:
         transactions = db.search_transactions(query=query, limit=limit)
         return transactions
@@ -182,7 +182,7 @@ async def get_etl_logs(
     limit: int = Query(50, ge=1, le=1000),
     db: DatabaseManager = Depends(get_db_manager)
 ):
-    """Get recent ETL process logs."""
+    """Get ETL process logs."""
     try:
         logs = db.get_etl_logs(limit=limit)
         return logs
@@ -192,7 +192,7 @@ async def get_etl_logs(
 
 @app.get("/api/database-stats", response_model=DatabaseStats)
 async def get_database_stats(db: DatabaseManager = Depends(get_db_manager)):
-    """Get database statistics."""
+    """Get database stats."""
     try:
         stats = db.get_database_stats()
         return DatabaseStats(**stats)
@@ -243,7 +243,7 @@ async def run_etl(
 
 @app.get("/api/export-json")
 async def export_json(db: DatabaseManager = Depends(get_db_manager)):
-    """Export dashboard data as JSON file."""
+    """Export dashboard data as JSON."""
     try:
         # Import here to avoid circular imports
         from etl.load_db import DatabaseLoader
@@ -305,7 +305,7 @@ async def startup_event():
     # Test database connection
     try:
         stats = db_manager.get_database_stats()
-        logger.info(f"Database connected successfully. Stats: {stats}")
+        logger.info(f"Database connected. Stats: {stats}")
     except Exception as e:
         logger.error(f"Database connection failed: {e}")
 

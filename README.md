@@ -5,7 +5,7 @@ A full-stack application that processes mobile money (MoMo) SMS data, categorize
 ## Team
 
 - **Team Name**: Team 11
-- **Project**: Enterprise-level fullstack application for MoMo SMS data processing
+- **Project**: MoMo SMS data processing system
 - **Course**: Enterprise Web Development
 
 ### Team Members
@@ -22,7 +22,7 @@ A full-stack application that processes mobile money (MoMo) SMS data, categorize
 
 ## Overview
 
-This system processes XML-formatted SMS data from mobile money services, cleans and normalizes the data, categorizes transactions, and stores everything in a SQLite database. The web dashboard provides visual analytics and transaction insights.
+This system processes XML-formatted SMS data from mobile money services, cleans and normalizes the data, categorizes transactions, and stores everything in a SQLite database. The web dashboard provides analytics and transaction insights.
 
 ## Quick Start
 
@@ -84,7 +84,7 @@ This system processes XML-formatted SMS data from mobile money services, cleans 
 │       ├── etl.log            # ETL process logs
 │       └── dead_letter/       # Failed processing logs
 ├── database/                    # Database schema and setup
-│   └── database_setup.sql     # Complete database schema with sample data
+│   └── database_setup.sql     # Database schema with sample data
 ├── docs/                        # Documentation
 │   └── ERD.jpg                  # Entity Relationship Diagram
 ├── examples/                    # JSON schema examples
@@ -93,7 +93,7 @@ This system processes XML-formatted SMS data from mobile money services, cleans 
 │   ├── transaction_category_schema.json # Category entity JSON schema
 │   ├── system_log_schema.json # System log JSON schema
 │   ├── transaction_statistics_schema.json # Statistics JSON schema
-│   ├── complete_transaction_example.json # Complete transaction with relations
+│   ├── complete_transaction_example.json # Transaction with relations
 │   └── json_schema_mapping.md # SQL to JSON mapping documentation
 ├── etl/                         # ETL pipeline
 │   ├── config.py              # Configuration settings
@@ -121,19 +121,19 @@ This system processes XML-formatted SMS data from mobile money services, cleans 
 ### Data Processing
 - **XML Parsing**: Extracts transaction data from MoMo SMS XML files
 - **Data Cleaning**: Normalizes phone numbers, amounts, and dates
-- **Transaction Categorization**: Automatically categorizes transactions by type
+- **Transaction Categorization**: Categorizes transactions by type
 - **Database Storage**: Stores processed data in SQLite with proper relationships
 
 ### Web Dashboard
-- **Transaction Analytics**: Visual charts and tables showing transaction patterns
+- **Transaction Analytics**: Charts and tables showing transaction patterns
 - **User Statistics**: User activity and spending insights
 - **Category Breakdown**: Transaction distribution by category
 - **Real-time Updates**: Dashboard refreshes with new data
 
-### API (Optional)
-- **RESTful Endpoints**: Standard API for data access
+### API
+- **RESTful Endpoints**: API for data access
 - **JSON Responses**: Structured data in JSON format
-- **Pagination**: Efficient data retrieval for large datasets
+- **Pagination**: Data retrieval for large datasets
 
 ## Configuration
 
@@ -191,38 +191,36 @@ python -m pytest tests/
 
 ### Code Style
 
-We followed PEP 8 Python style guidelines throughout the project.
+We follow PEP 8 Python style guidelines.
 
 ### Database Schema
 
-The system uses a comprehensive, normalized database schema designed for scalability and data integrity:
+The system uses a simplified, flat database schema for straightforward data processing:
 
 #### Core Entities
-- **Users** - Customer information with phone numbers and transaction statistics
-- **Transaction_Categories** - Transaction types and categorization rules
-- **Transactions** - Main transaction records with full audit trail
-- **System_Logs** - ETL process tracking and system monitoring
-- **Transaction_Statistics** - Pre-calculated analytics for performance
+- **Transactions** - Main transaction records with metadata and processing timestamps
+- **ETL_Logs** - ETL process tracking and monitoring
+- **Category_Stats** - Category-level analytics for dashboard performance
+- **Transactions_Backup** - Data preservation and migration support
 
 #### Key Features
-- **Referential Integrity** - Foreign key constraints ensure data consistency
-- **Performance Optimization** - Strategic indexes for common queries
-- **Audit Trail** - Complete transaction history with timestamps
-- **JSON Support** - Flexible storage for variable metadata
-- **Statistics Pre-calculation** - Optimized dashboard performance
+- **Simplified Structure** - Flat, denormalized design for easy data access
+- **Performance Optimization** - Indexes on frequently queried columns
+- **Audit Trail** - Transaction history with processing timestamps
+- **Flexible Metadata** - JSON storage for variable transaction attributes
+- **Statistics Pre-calculation** - Dashboard performance through aggregated data
 
 #### Database Design
-- **ERD Documentation**: See `docs/ERD_Documentation.md` for complete design rationale
-- **SQL Schema**: Complete setup script in `database/database_setup.sql`
-- **JSON Mapping**: API serialization patterns in `examples/json_schema_mapping.md`
+- **ERD Documentation**: See `docs/ERD_Documentation.md` for design rationale
+- **Schema Implementation**: Database structure for ETL processing
+- **Data Processing**: Integration with XML parsing and categorization
 
-#### Sample Data
-The database includes comprehensive sample data demonstrating:
-- 5 users with transaction histories
-- 6 transaction categories with rules
-- 5 sample transactions with full metadata
-- System logs showing ETL processes
-- Pre-calculated statistics for analytics
+#### Data Processing
+The database supports transaction processing including:
+- XML data parsing and normalization
+- Transaction categorization with confidence scoring
+- ETL process monitoring and logging
+- Category-level statistics aggregation for analytics
 
 ## Troubleshooting
 
@@ -234,7 +232,7 @@ The database includes comprehensive sample data demonstrating:
 - Review logs in `data/logs/etl.log`
 
 **Dashboard not loading**
-- Ensure ETL process completed successfully
+- Ensure ETL process completed
 - Check that `data/processed/dashboard.json` exists
 - Verify web server is running on correct port
 
@@ -253,25 +251,25 @@ The database includes comprehensive sample data demonstrating:
 
 ### Entity Relationship Diagram (ERD)
 - **Location**: `docs/ERD_Documentation.md`
-- **Design**: We created a comprehensive ERD with 5 core entities
-- **Relationships**: Implemented proper 1:M and M:N relationships with junction tables
-- **Justification**: Included 300-word design rationale explaining our approach
+- **Design**: Simplified schema with 4 core entities for ETL processing
+- **Structure**: Flat, denormalized design for straightforward data access
+- **Justification**: Design rationale explaining our simplified approach
 
-### SQL Database Implementation
-- **Location**: `database/database_setup.sql` and `database/mysql_database_setup.sql`
-- **Features**: Complete DDL with constraints, indexes, and sample data
-- **Testing**: Includes verification queries and CRUD operations
-- **Performance**: Strategic indexes and triggers for data consistency
+### Database Implementation
+- **Schema**: Implemented schema for transaction processing
+- **Features**: Indexing, data validation, and ETL integration
+- **Performance**: For dashboard analytics and processing
+- **Flexibility**: JSON metadata storage and audit trails
 
-### JSON Data Modeling
-- **Location**: `examples/` directory
-- **Schemas**: Individual entity schemas with proper nesting
-- **Complex Example**: Complete transaction with all related data
-- **Mapping**: SQL to JSON serialization documentation
+### Data Processing Integration
+- **ETL Pipeline**: Integration with XML parsing and categorization
+- **Logging**: Process monitoring and error tracking
+- **Analytics**: Pre-calculated statistics for dashboard performance
+- **Backup**: Data preservation and migration capabilities
 
 ### Team Collaboration
 - **Repository**: Updated with proper folder structure
-- **Documentation**: Comprehensive README with database design
+- **Documentation**: README with database design
 - **Organization**: Clear separation of concerns across directories
 
 ## Assignment Details
@@ -279,8 +277,8 @@ The database includes comprehensive sample data demonstrating:
 This project was developed by our team as part of the Enterprise Web Development course. The system demonstrates our skills in:
 
 - Backend data processing and ETL pipelines
-- Database design and management with proper normalization
+- Database design and management
 - Frontend development and data visualization
-- API design and implementation with JSON serialization
+- API design and implementation
 - Full-stack application architecture
 - Entity relationship modeling and database optimization

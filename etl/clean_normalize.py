@@ -16,7 +16,7 @@ from .config import (
 logger = logging.getLogger(__name__)
 
 class DataCleaner:
-    """Clean and normalize transaction data."""
+    """Cleans and normalizes transaction data."""
     
     def __init__(self):
         self.cleaned_count = 0
@@ -24,15 +24,7 @@ class DataCleaner:
         self.errors = []
     
     def clean_transactions(self, transactions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """
-        Clean and normalize a list of transactions.
-        
-        Args:
-            transactions: List of raw transaction dictionaries
-            
-        Returns:
-            List of cleaned transaction dictionaries
-        """
+        """Clean and normalize a list of transactions."""
         cleaned_transactions = []
         
         for i, transaction in enumerate(transactions):
@@ -53,15 +45,7 @@ class DataCleaner:
         return cleaned_transactions
     
     def clean_transaction(self, transaction: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """
-        Clean and normalize a single transaction.
-        
-        Args:
-            transaction: Raw transaction dictionary
-            
-        Returns:
-            Cleaned transaction dictionary or None if cleaning failed
-        """
+        """Clean and normalize a single transaction."""
         try:
             cleaned = transaction.copy()
             
@@ -96,15 +80,7 @@ class DataCleaner:
             return None
     
     def clean_amount(self, amount: Any) -> Optional[float]:
-        """
-        Clean and validate amount.
-        
-        Args:
-            amount: Raw amount value
-            
-        Returns:
-            Cleaned amount as float or None if invalid
-        """
+        """Clean and validate amount value."""
         if amount is None:
             return None
         
@@ -138,15 +114,7 @@ class DataCleaner:
             return None
     
     def clean_phone(self, phone: Any) -> Optional[str]:
-        """
-        Clean and normalize phone number.
-        
-        Args:
-            phone: Raw phone number
-            
-        Returns:
-            Cleaned phone number or None if invalid
-        """
+        """Clean and normalize phone number."""
         if phone is None:
             return None
         
@@ -157,22 +125,30 @@ class DataCleaner:
             # Remove common separators
             cleaned = re.sub(r'[^\d+]', '', phone_str)
             
-            # Normalize Uganda phone numbers
-            if cleaned.startswith('+256'):
-                # +256XXXXXXXXX format
+            # Normalize Rwanda phone numbers
+            if cleaned.startswith('+250'):
+                # +250XXXXXXXXX format
                 if len(cleaned) == 13:
                     return cleaned
-            elif cleaned.startswith('256'):
-                # 256XXXXXXXXX format
+            elif cleaned.startswith('250'):
+                # 250XXXXXXXXX format
                 if len(cleaned) == 12:
                     return '+' + cleaned
             elif cleaned.startswith('0'):
                 # 0XXXXXXXXX format
                 if len(cleaned) == 10:
-                    return '+256' + cleaned[1:]
+                    return '+250' + cleaned[1:]
+            elif cleaned.startswith('+256'):
+                # Convert Uganda numbers to Rwanda format
+                if len(cleaned) == 13:
+                    return '+250' + cleaned[4:]
+            elif cleaned.startswith('256'):
+                # Convert Uganda numbers to Rwanda format
+                if len(cleaned) == 12:
+                    return '+250' + cleaned[3:]
             
             # Try to extract phone number from text
-            phone_match = re.search(r'(\+?256\d{9}|0\d{9})', phone_str)
+            phone_match = re.search(r'(\+?25[06]\d{9}|0\d{9})', phone_str)
             if phone_match:
                 return self.clean_phone(phone_match.group(1))
             
@@ -188,15 +164,7 @@ class DataCleaner:
             return None
     
     def clean_date(self, date: Any) -> Optional[str]:
-        """
-        Clean and normalize date.
-        
-        Args:
-            date: Raw date value
-            
-        Returns:
-            ISO formatted date string or None if invalid
-        """
+        """Clean and normalize date value."""
         if date is None:
             return None
         
@@ -242,15 +210,7 @@ class DataCleaner:
             return None
     
     def clean_reference(self, reference: Any) -> Optional[str]:
-        """
-        Clean reference number.
-        
-        Args:
-            reference: Raw reference value
-            
-        Returns:
-            Cleaned reference string or None if invalid
-        """
+        """Clean reference number."""
         if reference is None:
             return None
         
@@ -271,15 +231,7 @@ class DataCleaner:
             return None
     
     def clean_type(self, transaction_type: Any) -> str:
-        """
-        Clean transaction type.
-        
-        Args:
-            transaction_type: Raw transaction type
-            
-        Returns:
-            Cleaned transaction type
-        """
+        """Clean transaction type."""
         if transaction_type is None:
             return 'UNKNOWN'
         
@@ -306,15 +258,7 @@ class DataCleaner:
             return 'UNKNOWN'
     
     def clean_status(self, status: Any) -> str:
-        """
-        Clean transaction status.
-        
-        Args:
-            status: Raw transaction status
-            
-        Returns:
-            Cleaned transaction status
-        """
+        """Clean transaction status."""
         if status is None:
             return 'UNKNOWN'
         
@@ -341,7 +285,7 @@ class DataCleaner:
             return 'UNKNOWN'
     
     def get_cleaning_summary(self) -> Dict[str, Any]:
-        """Get summary of cleaning results."""
+        """Get cleaning summary stats."""
         return {
             'total_processed': self.cleaned_count + self.error_count,
             'successfully_cleaned': self.cleaned_count,

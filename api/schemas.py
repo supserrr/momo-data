@@ -44,7 +44,7 @@ class TransactionType(str, Enum):
 class TransactionBase(BaseModel):
     """Base transaction model."""
     amount: float = Field(..., description="Transaction amount", gt=0)
-    phone: str = Field(..., description="Phone number", min_length=10, max_length=15)
+    phone: Optional[str] = Field(None, description="Phone number", min_length=10, max_length=15)
     date: Optional[str] = Field(None, description="Transaction date (ISO format)")
     reference: Optional[str] = Field(None, description="Transaction reference")
     type: Optional[str] = Field(None, description="Transaction type")
@@ -70,6 +70,8 @@ class TransactionUpdate(BaseModel):
 class Transaction(TransactionBase):
     """Complete transaction model."""
     id: int = Field(..., description="Transaction ID")
+    personal_id: Optional[str] = Field(None, description="Personal ID")
+    recipient_name: Optional[str] = Field(None, description="Recipient name")
     original_data: Optional[str] = Field(None, description="Original raw data")
     raw_data: Optional[str] = Field(None, description="Raw XML data")
     xml_tag: Optional[str] = Field(None, description="XML tag name")

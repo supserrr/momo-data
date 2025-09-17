@@ -74,27 +74,66 @@ document.addEventListener('DOMContentLoaded', function() {
     // setInterval(loadDashboardData, 30000);
 });
 
-// Load dashboard data from API
+// Load dashboard data from API - unified approach
 async function loadDashboardData() {
     try {
-        // Load dashboard data for metrics and charts
-        const response = await fetch('http://localhost:8000/api/dashboard-data');
-        if (!response.ok) throw new Error('Failed to load dashboard data');
+        console.log('Loading unified dashboard data...');
+        
+        // Load ALL transactions first - this is our single source of truth
+        const allTransactionsData = await loadAllTransactions();
+        console.log('Loaded transactions:', allTransactionsData.length);
+        
+        if (allTransactionsData.length === 0) {
+            throw new Error('No transaction data available');
+        }
+        
+        // Generate all other data from the transactions
+        const unifiedData = generateUnifiedDataFromTransactions(allTransactionsData);
+        
+        // Store all transactions for pagination
+        allTransactions = allTransactionsData;
+    currentPage = 1;
+        totalPages = Math.ceil(allTransactions.length / pageSize);
+        
+        // Update all sections with the same unified data
+        updateKeyMetrics(unifiedData);
+        updateCharts(unifiedData);
+        updateTransactionsTable(unifiedData);
+        
+        console.log('Dashboard data loaded successfully with unified approach');
+        
+    } catch (error) {
+        console.error('Error loading dashboard data:', error);
+        // Show error message instead of sample data
+        showErrorMessage('Unable to load data from API. Please check your connection and try again.');
+        
+        // Clear all sections
+        updateKeyMetrics({
+            summary: {
+                total_transactions: 0,
+                total_amount: 0,
+                success_rate: 0
+            }
+        });
+        updateCharts({
+            charts: {
+                monthly_stats: [],
+                category_distribution: [],
+                hourly_pattern: [],
+                amount_distribution: []
+            }
+        });
+        updateTransactionsTable({
+            summary: { total_transactions: 0 }
+        });
+    }
+}
 
-        const data = await response.json();
-        console.log('Dashboard data from API:', data);
-        
-        // Load monthly transaction data
-        const monthlyResponse = await fetch('http://localhost:8000/api/monthly-transactions');
-        if (!monthlyResponse.ok) throw new Error('Failed to load monthly data');
-        
-        const monthlyData = await monthlyResponse.json();
-        console.log('Monthly data from API:', monthlyData);
-        
-        // Load ALL transactions for the table using pagination (API limit is 100)
+// Load all transactions from API with pagination
+async function loadAllTransactions() {
         const allTransactionsData = [];
         let offset = 0;
-        const limit = 100; // Use larger chunks for better performance
+    const limit = 100; // Use larger chunks for better performance
         let hasMore = true;
         let consecutiveErrors = 0;
         
@@ -108,18 +147,18 @@ async function loadDashboardData() {
                 
                 const batch = await transactionsResponse.json();
                 
-                // Check if we got an error response
+            // Check if we got an error response
                 if (batch.success === false) {
                     console.warn(`API returned error at offset ${offset}, stopping pagination`);
                     break;
                 }
                 
                 allTransactionsData.push(...batch);
-                
-                // If we got fewer than the limit, we've reached the end
+            
+            // If we got fewer than the limit, we've reached the end
                 hasMore = batch.length === limit;
                 offset += limit;
-                consecutiveErrors = 0; // Reset error counter on success
+            consecutiveErrors = 0; // Reset error counter on success
                 
                 // Safety check to prevent infinite loops
                 if (offset > 10000) break;
@@ -127,339 +166,105 @@ async function loadDashboardData() {
             } catch (error) {
                 console.warn(`Error fetching transactions at offset ${offset}:`, error);
                 consecutiveErrors++;
-                offset += limit; // Try next batch
-            }
+            offset += limit; // Try next batch
         }
-        
-        console.log('All transactions from API:', allTransactionsData.length);
-        
-        // Transform API data to match expected format
-        const transformedData = transformAPIData(data, monthlyData, allTransactionsData);
-        
-        // Store all transactions for pagination (use the full transaction list)
-        allTransactions = allTransactionsData || [];
-        currentPage = 1;
-        totalPages = Math.ceil(allTransactions.length / pageSize);
-        
-        updateKeyMetrics(transformedData);
-        updateCharts(transformedData);
-        updateTransactionsTable(transformedData);
-    } catch (error) {
-        console.error('Error loading dashboard data:', error);
-        // Load sample data as fallback
-        loadSampleData();
     }
+    
+    return allTransactionsData;
 }
 
-// Manual refresh function for the refresh button
-async function refreshDashboardData() {
-    const refreshBtn = document.getElementById('refreshDataBtn');
-    if (refreshBtn) {
-        refreshBtn.disabled = true;
-        refreshBtn.innerHTML = 'Refreshing...';
-        refreshBtn.style.opacity = '0.7';
+// Generate unified data from transactions - single source of truth
+function generateUnifiedDataFromTransactions(transactions) {
+    if (!transactions || transactions.length === 0) {
+        return {
+            summary: {
+                total_transactions: 0,
+                total_amount: 0,
+                success_rate: 0,
+                active_users: 0
+            },
+            charts: {
+                monthly_stats: [],
+                category_distribution: [],
+                hourly_pattern: [],
+                amount_distribution: []
+            }
+        };
     }
     
-    try {
-        await loadDashboardData();
-        
-        // Show success feedback
-        if (refreshBtn) {
-            refreshBtn.innerHTML = 'Refreshed!';
-            setTimeout(() => {
-                refreshBtn.innerHTML = 'Refresh Data';
-                refreshBtn.disabled = false;
-                refreshBtn.style.opacity = '1';
-            }, 2000);
-        }
-    } catch (error) {
-        console.error('Error refreshing data:', error);
-        
-        // Show error feedback
-        if (refreshBtn) {
-            refreshBtn.innerHTML = 'Error';
-            setTimeout(() => {
-                refreshBtn.innerHTML = 'Refresh Data';
-                refreshBtn.disabled = false;
-                refreshBtn.style.opacity = '1';
-            }, 2000);
-        }
-    }
-}
-
-// Parse SMS XML data and extract transaction information
-function parseSMSData(xmlText) {
-    const parser = new DOMParser();
-    const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
-    const smsElements = xmlDoc.querySelectorAll('sms');
-    
-    const transactions = [];
-    const transactionTypes = {};
-    const dailyStats = {};
-    const hourlyStats = {};
-    const userStats = {};
-    let totalAmount = 0;
-    let successfulTransactions = 0;
-    
-    console.log(`Processing ${smsElements.length} SMS messages...`);
-    
-    smsElements.forEach(sms => {
-        const body = sms.getAttribute('body') || '';
-        const date = parseInt(sms.getAttribute('date'));
-        const readableDate = sms.getAttribute('readable_date');
-        
-        // Parse different types of MTN Mobile Money messages
-        const transaction = parseTransactionFromSMS(body, date, readableDate);
-        
-        if (transaction) {
-            transactions.push(transaction);
-            
-            // Update statistics
-            totalAmount += transaction.amount || 0;
-            if (transaction.status === 'SUCCESS') {
-                successfulTransactions++;
-            }
-            
-            // Count transaction types
-            const type = transaction.type || 'UNKNOWN';
-            transactionTypes[type] = (transactionTypes[type] || 0) + 1;
-            
-            // Daily stats
-            const day = new Date(date).toISOString().split('T')[0];
-            dailyStats[day] = (dailyStats[day] || 0) + 1;
-            
-            // Hourly stats
-            const hour = new Date(date).getHours();
-            const hourKey = `${Math.floor(hour / 4) * 4}:00`;
-            hourlyStats[hourKey] = (hourlyStats[hourKey] || 0) + 1;
-            
-            // User stats (from recipient names)
-            if (transaction.recipient) {
-                userStats[transaction.recipient] = (userStats[transaction.recipient] || 0) + 1;
-            }
-        }
-    });
-    
-    // Sort transactions by date (newest first)
-    transactions.sort((a, b) => b.date - a.date);
-    
-    // Calculate success rate
+    // Calculate summary statistics
+    const totalAmount = transactions.reduce((sum, tx) => sum + (tx.amount || 0), 0);
+    const successfulTransactions = transactions.filter(tx => tx.status === 'SUCCESS').length;
     const successRate = transactions.length > 0 ? (successfulTransactions / transactions.length) * 100 : 0;
+    const uniquePhones = new Set(transactions.map(tx => tx.phone).filter(phone => phone)).size;
     
-    console.log(`Parsed ${transactions.length} transactions`);
-    console.log('Transaction types found:', transactionTypes);
-    
-    // Remove top users analysis - no longer needed
-    
-    // Get daily stats for charts
-    const dailyStatsArray = Object.entries(dailyStats)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([date, count]) => ({ date, count }));
-    
-    // Get detailed hourly stats for charts (24-hour analysis)
-    const detailedHourlyStats = {};
-    transactions.forEach(t => {
-        const hour = new Date(t.date).getHours();
-        if (!detailedHourlyStats[hour]) {
-            detailedHourlyStats[hour] = { count: 0, volume: 0 };
+    // Generate category distribution from transactions
+    const categoryStats = {};
+    transactions.forEach(tx => {
+        let category = tx.category || tx.type || 'UNKNOWN';
+        
+        // Normalize category names for display
+        if (category === 'DATA_BUNDLE') category = 'Data Bundle';
+        else if (category === 'AIRTIME') category = 'Airtime';
+        else if (category === 'DEPOSIT') category = 'Deposit';
+        else if (category === 'WITHDRAWAL') category = 'Withdrawal';
+        else if (category === 'PAYMENT') category = 'Payment';
+        else if (category === 'TRANSFER') category = 'Transfer';
+        else if (category === 'QUERY') category = 'Query';
+        else if (category === 'OTHER') category = 'Other';
+        else if (category === 'UNKNOWN') category = 'Unknown';
+        else if (category === 'PURCHASE') category = 'Purchase';
+        else if (category === 'SEND') category = 'Send';
+        else if (category === 'RECEIVE') category = 'Receive';
+        else if (category === 'CASH_OUT') category = 'Cash Out';
+        
+        if (!categoryStats[category]) {
+            categoryStats[category] = { count: 0, total_amount: 0, amounts: [] };
         }
-        detailedHourlyStats[hour].count++;
-        detailedHourlyStats[hour].volume += t.amount || 0;
+        categoryStats[category].count++;
+        categoryStats[category].total_amount += tx.amount || 0;
+        categoryStats[category].amounts.push(tx.amount || 0);
     });
     
-    // Create hourly pattern with 4-hour intervals for better visualization
-    const hourlyStatsArray = [
-        { hour: '00:00-03:59', count: (detailedHourlyStats[0]?.count || 0) + (detailedHourlyStats[1]?.count || 0) + (detailedHourlyStats[2]?.count || 0) + (detailedHourlyStats[3]?.count || 0), volume: (detailedHourlyStats[0]?.volume || 0) + (detailedHourlyStats[1]?.volume || 0) + (detailedHourlyStats[2]?.volume || 0) + (detailedHourlyStats[3]?.volume || 0) },
-        { hour: '04:00-07:59', count: (detailedHourlyStats[4]?.count || 0) + (detailedHourlyStats[5]?.count || 0) + (detailedHourlyStats[6]?.count || 0) + (detailedHourlyStats[7]?.count || 0), volume: (detailedHourlyStats[4]?.volume || 0) + (detailedHourlyStats[5]?.volume || 0) + (detailedHourlyStats[6]?.volume || 0) + (detailedHourlyStats[7]?.volume || 0) },
-        { hour: '08:00-11:59', count: (detailedHourlyStats[8]?.count || 0) + (detailedHourlyStats[9]?.count || 0) + (detailedHourlyStats[10]?.count || 0) + (detailedHourlyStats[11]?.count || 0), volume: (detailedHourlyStats[8]?.volume || 0) + (detailedHourlyStats[9]?.volume || 0) + (detailedHourlyStats[10]?.volume || 0) + (detailedHourlyStats[11]?.volume || 0) },
-        { hour: '12:00-15:59', count: (detailedHourlyStats[12]?.count || 0) + (detailedHourlyStats[13]?.count || 0) + (detailedHourlyStats[14]?.count || 0) + (detailedHourlyStats[15]?.count || 0), volume: (detailedHourlyStats[12]?.volume || 0) + (detailedHourlyStats[13]?.volume || 0) + (detailedHourlyStats[14]?.volume || 0) + (detailedHourlyStats[15]?.volume || 0) },
-        { hour: '16:00-19:59', count: (detailedHourlyStats[16]?.count || 0) + (detailedHourlyStats[17]?.count || 0) + (detailedHourlyStats[18]?.count || 0) + (detailedHourlyStats[19]?.count || 0), volume: (detailedHourlyStats[16]?.volume || 0) + (detailedHourlyStats[17]?.volume || 0) + (detailedHourlyStats[18]?.volume || 0) + (detailedHourlyStats[19]?.volume || 0) },
-        { hour: '20:00-23:59', count: (detailedHourlyStats[20]?.count || 0) + (detailedHourlyStats[21]?.count || 0) + (detailedHourlyStats[22]?.count || 0) + (detailedHourlyStats[23]?.count || 0), volume: (detailedHourlyStats[20]?.volume || 0) + (detailedHourlyStats[21]?.volume || 0) + (detailedHourlyStats[22]?.volume || 0) + (detailedHourlyStats[23]?.volume || 0) }
-    ];
-    
-    return {
-        summary: {
-            total_transactions: transactions.length,
-            total_amount: totalAmount,
-            success_rate: successRate,
-            successful_transactions: successfulTransactions,
-            last_updated: new Date().toISOString()
-        },
-        transactions: transactions.slice(0, 50), // Show last 50 transactions
-        statistics: {
-            transactionTypes: transactionTypes
-        },
-        charts: {
-            daily_stats: dailyStatsArray,
-            category_distribution: Object.entries(transactionTypes).map(([type, count]) => ({
-                category: type,
-                count: count
-            })),
-            hourly_pattern: hourlyStatsArray
-        }
-    };
-}
-
-// Parse individual transaction from SMS message
-function parseTransactionFromSMS(body, timestamp, readableDate) {
-    if (!body || !body.includes('RWF')) return null;
-    
-    let transaction = {
-        date: new Date(timestamp).toISOString(),
-        amount: 0,
-        type: 'UNKNOWN',
-        status: 'SUCCESS',
-        recipient: null,
-        sender: null,
-        fee: 0,
-        balance: 0
-    };
-    
-    console.log('Parsing SMS:', body.substring(0, 100) + '...');
-    
-    // Extract amount (look for patterns like "2000 RWF", "1,000 RWF", etc.)
-    const amountMatch = body.match(/(\d{1,3}(?:,\d{3})*)\s*RWF/);
-    if (amountMatch) {
-        transaction.amount = parseInt(amountMatch[1].replace(/,/g, ''));
-    }
-    
-    // Determine transaction type based on message content
-    if (body.includes('received') && body.includes('from')) {
-        transaction.type = 'DEPOSIT';
-        transaction.status = 'SUCCESS';
-        // Extract sender name
-        const senderMatch = body.match(/from\s+([^(]+)\s*\(/);
-        if (senderMatch) {
-            transaction.sender = senderMatch[1].trim();
-        }
-    } else if (body.includes('bank deposit')) {
-        transaction.type = 'DEPOSIT';
-        transaction.status = 'SUCCESS';
-    } else if (body.includes('transferred to')) {
-        transaction.type = 'TRANSFER';
-        transaction.status = 'SUCCESS';
-        // Extract recipient name
-        const recipientMatch = body.match(/transferred to\s+([^(]+)\s*\(/);
-        if (recipientMatch) {
-            transaction.recipient = recipientMatch[1].trim();
-        }
-    } else if (body.includes('payment of') && body.includes('to')) {
-        // Check if it's airtime first
-        if (body.includes('Airtime')) {
-            transaction.type = 'AIRTIME';
-        } else {
-            transaction.type = 'PAYMENT';
-        }
-        transaction.status = 'SUCCESS';
-        // Extract recipient name
-        const recipientMatch = body.match(/to\s+([^(]+)\s*\d+/);
-        if (recipientMatch) {
-            transaction.recipient = recipientMatch[1].trim();
-        }
-    } else if (body.includes('withdrawal') || body.includes('withdraw')) {
-        transaction.type = 'WITHDRAWAL';
-        transaction.status = 'SUCCESS';
-    }
-    
-    // Extract fee
-    const feeMatch = body.match(/Fee was[:\s]*(\d+)\s*RWF/);
-    if (feeMatch) {
-        transaction.fee = parseInt(feeMatch[1]);
-    }
-    
-    // Extract balance
-    const balanceMatch = body.match(/balance[:\s]*(\d{1,3}(?:,\d{3})*)\s*RWF/);
-    if (balanceMatch) {
-        transaction.balance = parseInt(balanceMatch[1].replace(/,/g, ''));
-    }
-    
-    // Check for failed transactions
-    if (body.includes('failed') || body.includes('error') || body.includes('unsuccessful')) {
-        transaction.status = 'FAILED';
-    }
-    
-    console.log('Parsed transaction:', transaction.type, transaction.amount);
-    
-    return transaction.amount > 0 ? transaction : null;
-}
-
-// Transform API data to match expected frontend format
-function transformAPIData(apiData, monthlyData = null, allTransactionsData = null) {
-    const { summary, categories, amount_distribution, recent_transactions } = apiData;
-    
-    // Use all transactions data if available, otherwise fall back to recent_transactions
-    const transactionsToUse = allTransactionsData || recent_transactions;
-    
-    // Transform categories to match expected format with additional data
-    const categoryDistribution = categories.map(cat => ({
-        category: cat.category,
-        count: cat.count,
-        total_amount: cat.total_amount || 0,
-        avg_amount: cat.avg_amount || 0,
-        min_amount: cat.min_amount || 0,
-        max_amount: cat.max_amount || 0
-    }));
-    
-    // Use monthly data from API if available, otherwise fallback to recent transactions
-    let monthlyStatsArray = [];
-    if (monthlyData && monthlyData.monthly_stats) {
-        monthlyStatsArray = monthlyData.monthly_stats.map(stats => ({
-            month: stats.month,
+    const categoryDistribution = Object.entries(categoryStats).map(([category, stats]) => ({
+        category,
             count: stats.count,
-            volume: stats.volume
+        total_amount: stats.total_amount,
+        avg_amount: stats.total_amount / stats.count,
+        min_amount: Math.min(...stats.amounts),
+        max_amount: Math.max(...stats.amounts)
         }));
-    } else {
-        // Fallback: create monthly stats from transactions
+    
+    // Generate monthly stats from transactions
         const monthlyStats = {};
-        transactionsToUse.forEach(tx => {
+    transactions.forEach(tx => {
             const date = new Date(tx.date);
             const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
             if (!monthlyStats[monthKey]) {
                 monthlyStats[monthKey] = { count: 0, volume: 0 };
             }
             monthlyStats[monthKey].count++;
-            monthlyStats[monthKey].volume += tx.amount;
+        monthlyStats[monthKey].volume += tx.amount || 0;
         });
         
-        monthlyStatsArray = Object.entries(monthlyStats)
+    const monthlyStatsArray = Object.entries(monthlyStats)
             .sort(([a], [b]) => a.localeCompare(b))
-            .map(([month, data]) => ({ 
-                month, 
-                count: data.count,
-                volume: data.volume
-            }));
-    }
+        .map(([month, data]) => ({ month, ...data }));
     
-    // Use hourly data from API if available, otherwise fallback to recent transactions
-    let hourlyPattern = Array.from({length: 24}, (_, i) => ({
+    // Generate hourly pattern from transactions
+    const hourlyPattern = Array.from({length: 24}, (_, i) => ({
         hour: i,
         count: 0,
         volume: 0
     }));
     
-    if (monthlyData && monthlyData.hourly_pattern) {
-        // Reset the pattern and populate with API data
-        hourlyPattern.forEach(slot => { slot.count = 0; slot.volume = 0; });
-        monthlyData.hourly_pattern.forEach(hour_data => {
-            const hour = parseInt(hour_data.hour);
-            if (hour >= 0 && hour < 24) {
-                hourlyPattern[hour] = {
-                    hour: hour,
-                    count: hour_data.count,
-                    volume: hour_data.volume
-                };
-            }
-        });
-    } else {
-        // Fallback: distribute transactions across hours
-        transactionsToUse.forEach(tx => {
+    transactions.forEach(tx => {
             const hour = new Date(tx.date).getHours();
             hourlyPattern[hour].count++;
-            hourlyPattern[hour].volume += tx.amount;
+        hourlyPattern[hour].volume += tx.amount || 0;
         });
-    }
     
-    // Create amount distribution data
+    // Generate amount distribution
     const amountRanges = [
         { range: '0-1,000', min: 0, max: 1000, count: 0 },
         { range: '1,000-5,000', min: 1000, max: 5000, count: 0 },
@@ -469,8 +274,8 @@ function transformAPIData(apiData, monthlyData = null, allTransactionsData = nul
         { range: '50,000+', min: 50000, max: Infinity, count: 0 }
     ];
     
-    transactionsToUse.forEach(tx => {
-        const amount = tx.amount;
+    transactions.forEach(tx => {
+        const amount = tx.amount || 0;
         for (let range of amountRanges) {
             if (amount >= range.min && amount < range.max) {
                 range.count++;
@@ -481,37 +286,13 @@ function transformAPIData(apiData, monthlyData = null, allTransactionsData = nul
     
     return {
         summary: {
-            total_transactions: summary.total_transactions,
-            total_amount: summary.total_amount,
-            average_transaction_amount: summary.average_transaction_amount,
-            success_rate: summary.success_rate,
-            successful_transactions: summary.successful_transactions,
-            failed_transactions: summary.failed_transactions,
-            pending_transactions: summary.pending_transactions,
-            last_updated: summary.last_updated
-        },
-        transactions: transactionsToUse.map(tx => ({
-            id: tx.id,
-            date: tx.date,
-            amount: tx.amount,
-            type: tx.type,
-            status: tx.status,
-            phone: tx.phone,
-            category: tx.category,
-            reference: tx.reference,
-            original_data: tx.original_data,
-            raw_data: tx.raw_data,
-            xml_tag: tx.xml_tag,
-            xml_attributes: tx.xml_attributes,
-            cleaned_at: tx.cleaned_at,
-            categorized_at: tx.categorized_at,
-            loaded_at: tx.loaded_at
-        })),
-        statistics: {
-            transactionTypes: categoryDistribution.reduce((acc, cat) => {
-                acc[cat.category] = cat.count;
-                return acc;
-            }, {})
+            total_transactions: transactions.length,
+            total_amount: totalAmount,
+            success_rate: successRate,
+            active_users: uniquePhones,
+            successful_transactions: successfulTransactions,
+            failed_transactions: transactions.length - successfulTransactions,
+            last_updated: new Date().toISOString()
         },
         charts: {
             monthly_stats: monthlyStatsArray,
@@ -522,239 +303,19 @@ function transformAPIData(apiData, monthlyData = null, allTransactionsData = nul
     };
 }
 
-// Load sample data for demonstration
-function loadSampleData() {
-    const sampleTransactions = [
-            {
-                id: 1,
-                date: '2024-01-15T10:30:00Z',
-                type: 'Transfer',
-                category: 'Transfer',
-                amount: 25000,
-                phone: '+250788123456',
-                reference: 'TXN001',
-                status: 'Success',
-                raw_data: 'You transferred 25000 RWF to John Doe. New balance: 50000 RWF',
-                xml_tag: 'sms',
-                xml_attributes: { address: 'M-Money', date: '1705312200000' }
-            },
-            {
-                id: 2,
-                date: '2024-01-15T09:45:00Z',
-                type: 'Payment',
-                category: 'Payment',
-                amount: 15000,
-                phone: '+250788234567',
-                reference: 'TXN002',
-                status: 'Success',
-                raw_data: 'Payment of 15000 RWF to Shop ABC. New balance: 35000 RWF',
-                xml_tag: 'sms',
-                xml_attributes: { address: 'M-Money', date: '1705309500000' }
-            },
-            {
-                id: 3,
-                date: '2024-01-15T09:15:00Z',
-                type: 'Withdrawal',
-                category: 'Withdrawal',
-                amount: 50000,
-                phone: '+250788345678',
-                reference: 'TXN003',
-                status: 'Pending',
-                raw_data: 'Withdrawal of 50000 RWF requested. Processing...',
-                xml_tag: 'sms',
-                xml_attributes: { address: 'M-Money', date: '1705307700000' }
-            },
-            {
-                id: 4,
-                date: '2024-01-15T08:30:00Z',
-                type: 'Transfer',
-                category: 'Transfer',
-                amount: 75000,
-                phone: '+250788456789',
-                reference: 'TXN004',
-                status: 'Success',
-                raw_data: 'You transferred 75000 RWF to Jane Smith. New balance: 125000 RWF',
-                xml_tag: 'sms',
-                xml_attributes: { address: 'M-Money', date: '1705305000000' }
-            },
-            {
-                id: 5,
-                date: '2024-01-15T08:00:00Z',
-                type: 'Payment',
-                category: 'Payment',
-                amount: 12000,
-                phone: '+250788567890',
-                reference: 'TXN005',
-                status: 'Failed',
-                raw_data: 'Payment failed. Insufficient balance.',
-                xml_tag: 'sms',
-                xml_attributes: { address: 'M-Money', date: '1705304400000' }
-            },
-            {
-                id: 6,
-                date: '2024-01-15T07:45:00Z',
-                type: 'Deposit',
-                category: 'Deposit',
-                amount: 100000,
-                phone: '+250788678901',
-                reference: 'TXN006',
-                status: 'Success',
-                raw_data: 'You received 100000 RWF from Bank Deposit. New balance: 200000 RWF',
-                xml_tag: 'sms',
-                xml_attributes: { address: 'M-Money', date: '1705303500000' }
-            },
-            {
-                id: 7,
-                date: '2024-01-15T07:20:00Z',
-                type: 'Transfer',
-                category: 'Transfer',
-                amount: 30000,
-                phone: '+250788789012',
-                reference: 'TXN007',
-                status: 'Success',
-                raw_data: 'You transferred 30000 RWF to Mike Johnson. New balance: 100000 RWF',
-                xml_tag: 'sms',
-                xml_attributes: { address: 'M-Money', date: '1705302000000' }
-            },
-            {
-                id: 8,
-                date: '2024-01-15T06:55:00Z',
-                type: 'Payment',
-                category: 'Payment',
-                amount: 8500,
-                phone: '+250788890123',
-                reference: 'TXN008',
-                status: 'Success',
-                raw_data: 'Payment of 8500 RWF to Restaurant XYZ. New balance: 130000 RWF',
-                xml_tag: 'sms',
-                xml_attributes: { address: 'M-Money', date: '1705300500000' }
-            },
-            {
-                id: 9,
-                date: '2024-01-15T06:30:00Z',
-                type: 'Withdrawal',
-                category: 'Withdrawal',
-                amount: 45000,
-                phone: '+250788901234',
-                reference: 'TXN009',
-                status: 'Pending',
-                raw_data: 'Withdrawal of 45000 RWF requested. Processing...',
-                xml_tag: 'sms',
-                xml_attributes: { address: 'M-Money', date: '1705299000000' }
-            },
-            {
-                id: 10,
-                date: '2024-01-15T06:00:00Z',
-                type: 'Transfer',
-                category: 'Transfer',
-                amount: 18000,
-                phone: '+250788012345',
-                reference: 'TXN010',
-                status: 'Success',
-                raw_data: 'You transferred 18000 RWF to Sarah Wilson. New balance: 138500 RWF',
-                xml_tag: 'sms',
-                xml_attributes: { address: 'M-Money', date: '1705297200000' }
-            }
-        ];
-    
-    const sampleData = {
-        summary: {
-            total_transactions: 1247,
-            total_amount: 15678900,
-            success_rate: 94.2,
-            active_users: 89
-        },
-        categories: [
-            { category: 'Transfer', count: 45, total_amount: 500000, avg_amount: 11111, min_amount: 1000, max_amount: 100000 },
-            { category: 'Payment', count: 30, total_amount: 300000, avg_amount: 10000, min_amount: 500, max_amount: 50000 },
-            { category: 'Withdrawal', count: 15, total_amount: 200000, avg_amount: 13333, min_amount: 2000, max_amount: 100000 },
-            { category: 'Deposit', count: 10, total_amount: 100000, avg_amount: 10000, min_amount: 1000, max_amount: 50000 }
-        ],
-        amount_distribution: [
-            { range: '0-1,000', count: 5 },
-            { range: '1,000-5,000', count: 15 },
-            { range: '5,000-10,000', count: 25 },
-            { range: '10,000-25,000', count: 30 },
-            { range: '25,000-50,000', count: 20 },
-            { range: '50,000+', count: 5 }
-        ],
-        recent_transactions: sampleTransactions,
-                    charts: {
-                        volume_by_date: {
-                            labels: ['2024-01-09', '2024-01-10', '2024-01-11', '2024-01-12', '2024-01-13', '2024-01-14', '2024-01-15'],
-                            data: [45, 52, 38, 67, 89, 76, 94]
-                        },
-                        category_distribution: [
-                            { category: 'Transfer', count: 45 },
-                            { category: 'Payment', count: 30 },
-                            { category: 'Withdrawal', count: 15 },
-                            { category: 'Deposit', count: 10 }
-                        ],
-                        hourly_pattern: {
-                            labels: ['00:00-03:59', '04:00-07:59', '08:00-11:59', '12:00-15:59', '16:00-19:59', '20:00-23:59'],
-                            data: [5, 8, 25, 35, 28, 15]
-                        }
-                    }
-    };
-    
-    // Store sample transactions for pagination
-    allTransactions = sampleTransactions;
-    currentPage = 1;
-    totalPages = Math.ceil(allTransactions.length / pageSize);
-    
-    // Create sample monthly data
-    const sampleMonthlyData = {
-        monthly_stats: [
-            { month: '2024-01', count: 150, volume: 2500000 },
-            { month: '2024-02', count: 180, volume: 3000000 },
-            { month: '2024-03', count: 200, volume: 3500000 },
-            { month: '2024-04', count: 220, volume: 4000000 },
-            { month: '2024-05', count: 250, volume: 4500000 },
-            { month: '2024-06', count: 280, volume: 5000000 }
-        ],
-        hourly_pattern: [
-            { hour: 0, count: 2, volume: 50000 },
-            { hour: 1, count: 1, volume: 25000 },
-            { hour: 2, count: 0, volume: 0 },
-            { hour: 3, count: 1, volume: 30000 },
-            { hour: 4, count: 2, volume: 40000 },
-            { hour: 5, count: 3, volume: 60000 },
-            { hour: 6, count: 5, volume: 100000 },
-            { hour: 7, count: 8, volume: 150000 },
-            { hour: 8, count: 12, volume: 200000 },
-            { hour: 9, count: 15, volume: 250000 },
-            { hour: 10, count: 18, volume: 300000 },
-            { hour: 11, count: 20, volume: 350000 },
-            { hour: 12, count: 22, volume: 400000 },
-            { hour: 13, count: 25, volume: 450000 },
-            { hour: 14, count: 28, volume: 500000 },
-            { hour: 15, count: 30, volume: 550000 },
-            { hour: 16, count: 32, volume: 600000 },
-            { hour: 17, count: 35, volume: 650000 },
-            { hour: 18, count: 38, volume: 700000 },
-            { hour: 19, count: 40, volume: 750000 },
-            { hour: 20, count: 35, volume: 650000 },
-            { hour: 21, count: 30, volume: 550000 },
-            { hour: 22, count: 25, volume: 450000 },
-            { hour: 23, count: 20, volume: 350000 }
-        ]
-    };
-    
-    // Transform sample data to match expected format
-    const transformedData = transformAPIData(sampleData, sampleMonthlyData, sampleTransactions);
-    
-    updateKeyMetrics(transformedData);
-    updateCharts(transformedData);
-    updateTransactionsTable(transformedData);
-}
+
+// SMS parsing functions removed - now using API data exclusively
+
+// This function is no longer needed - we use generateUnifiedDataFromTransactions instead
+
+// Sample data function removed - system now only uses real API data
 
 // Update key metrics cards
 function updateKeyMetrics(data) {
     const metrics = {
         totalTransactions: data.summary?.total_transactions || 0,
         totalAmount: data.summary?.total_amount || 0,
-        successRate: data.summary?.success_rate || 0,
-        activeUsers: data.summary?.unique_users || data.summary?.successful_transactions || 0
+        successRate: data.summary?.success_rate || 0
     };
     
     // Animate number updates
@@ -762,7 +323,7 @@ function updateKeyMetrics(data) {
         const element = document.getElementById(key);
         if (element) {
             const formattedValue = formatMetricValue(key, value);
-            element.innerHTML = `<span class="formatted-number animate-slide-in">${formattedValue}</span>`;
+            element.innerHTML = `<span class="formatted-number animate-slide-in" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: clamp(1.2rem, 3vw, 1.8rem); display: flex; align-items: center; justify-content: center; height: 100%;">${formattedValue}</span>`;
         }
     });
 }
@@ -775,7 +336,6 @@ function formatMetricValue(key, value) {
         case 'successRate':
             return `${value.toFixed(1)}%`;
         case 'totalTransactions':
-        case 'activeUsers':
             return value.toLocaleString();
         default:
             return value;
@@ -791,67 +351,22 @@ function updateCharts(data) {
     updateHourlyChart(data.charts?.hourly_pattern || []);
 }
 
-// Create chart data from real data structure
-function createChartDataFromRealData(data) {
-    const chartData = {
-        monthly_stats: [],
-        category_distribution: [],
-        hourly_pattern: []
-    };
-    
-    // Create category distribution from transaction types
-    if (data.statistics?.transactionTypes) {
-        chartData.category_distribution = Object.entries(data.statistics.transactionTypes).map(([type, count]) => ({
-            category: type,
-            count: count
-        }));
-    }
-    
-    // Create monthly stats from transactions
-    if (data.transactions && data.transactions.length > 0) {
-        const monthlyStats = {};
-        data.transactions.forEach(tx => {
-            const date = new Date(tx.date);
-            const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-            if (!monthlyStats[monthKey]) {
-                monthlyStats[monthKey] = { count: 0, volume: 0 };
-            }
-            monthlyStats[monthKey].count++;
-            monthlyStats[monthKey].volume += tx.amount;
-        });
-        
-        chartData.monthly_stats = Object.entries(monthlyStats)
-            .sort(([a], [b]) => a.localeCompare(b))
-            .map(([month, data]) => ({
-                month: month,
-                count: data.count,
-                volume: data.volume
-            }));
-    }
-    
-    // Create sample hourly pattern (since real data doesn't have this)
-    chartData.hourly_pattern = [
-        { hour: '00:00', count: 0 },
-        { hour: '04:00', count: 1 },
-        { hour: '08:00', count: 2 },
-        { hour: '12:00', count: 3 },
-        { hour: '16:00', count: 2 },
-        { hour: '20:00', count: 1 }
-    ];
-    
-    // Top users analysis removed - no longer needed
-    
-    return chartData;
-}
+// This function is no longer needed - we use generateUnifiedDataFromTransactions instead
 
 // Volume by Month Chart with Brutalist Styling
 function updateVolumeChart(monthlyStats) {
     const ctx = document.getElementById('volumeChart');
     if (!ctx) return;
     
+    // Handle empty data
+    if (!monthlyStats || monthlyStats.length === 0) {
+        if (charts.volume) charts.volume.destroy();
+        return;
+    }
+    
     const chartData = {
         labels: monthlyStats.map(d => formatMonth(d.month)),
-        datasets: [{
+            datasets: [{
             label: 'Transaction Count',
             data: monthlyStats.map(d => d.count),
             backgroundColor: COLORS.blue,
@@ -901,7 +416,7 @@ function updateVolumeChart(monthlyStats) {
                     display: true,
                     position: 'top',
                     labels: {
-                        font: {
+                    font: {
                             family: BRUTALIST_CONFIG.fontFamily,
                             size: 14,
                             weight: BRUTALIST_CONFIG.fontWeight
@@ -956,7 +471,7 @@ function updateVolumeChart(monthlyStats) {
                             size: 12
                         },
                         textTransform: BRUTALIST_CONFIG.textTransform,
-                        color: COLORS.black
+                    color: COLORS.black
                     }
                 },
                 y: {
@@ -1025,9 +540,15 @@ function updateCategoryChart(categories) {
     
     console.log('Category chart data:', categories);
     
+    // Handle empty data
+    if (!categories || categories.length === 0) {
+        if (charts.category) charts.category.destroy();
+        return;
+    }
+    
     const chartData = {
         labels: categories.map(c => c.category.toUpperCase()),
-        datasets: [{
+            datasets: [{
             label: 'Transaction Count',
             data: categories.map(c => c.count),
             backgroundColor: [
@@ -1038,8 +559,8 @@ function updateCategoryChart(categories) {
                 COLORS.blue,
                 COLORS.orange
             ],
-            borderColor: COLORS.black,
-            borderWidth: BRUTALIST_CONFIG.borderWidth,
+                borderColor: COLORS.black,
+                borderWidth: BRUTALIST_CONFIG.borderWidth,
             offset: 8,
             borderRadius: 0
         }]
@@ -1135,9 +656,15 @@ function updateAmountChart(amountData) {
     
     console.log('Amount chart data:', amountData);
     
+    // Handle empty data
+    if (!amountData || amountData.length === 0) {
+        if (charts.amount) charts.amount.destroy();
+        return;
+    }
+    
     const chartData = {
         labels: amountData.map(a => a.range),
-        datasets: [{
+            datasets: [{
             label: 'Transaction Count',
             data: amountData.map(a => a.count),
             backgroundColor: [
@@ -1148,8 +675,8 @@ function updateAmountChart(amountData) {
                 COLORS.blue,
                 COLORS.orange
             ],
-            borderColor: COLORS.black,
-            borderWidth: BRUTALIST_CONFIG.borderWidth,
+                borderColor: COLORS.black,
+                borderWidth: BRUTALIST_CONFIG.borderWidth,
             barThickness: 40,
             borderSkipped: false,
             borderRadius: 0,
@@ -1170,8 +697,8 @@ function updateAmountChart(amountData) {
                     display: true,
                     position: 'top',
                     labels: {
-                        font: {
-                            family: BRUTALIST_CONFIG.fontFamily,
+                    font: {
+                        family: BRUTALIST_CONFIG.fontFamily,
                             size: 14,
                             weight: BRUTALIST_CONFIG.fontWeight
                         },
@@ -1220,13 +747,13 @@ function updateAmountChart(amountData) {
                         },
                         textTransform: BRUTALIST_CONFIG.textTransform
                     }
-                },
+                    },
                 y: {
                     beginAtZero: true,
                     grid: {
                         color: COLORS.black,
                         lineWidth: 2
-                    },
+                },
                     ticks: {
                         font: {
                             family: BRUTALIST_CONFIG.fontFamily,
@@ -1245,6 +772,12 @@ function updateAmountChart(amountData) {
 function updateHourlyChart(hourlyData) {
     const ctx = document.getElementById('hourlyChart');
     if (!ctx) return;
+    
+    // Handle empty data
+    if (!hourlyData || hourlyData.length === 0) {
+        if (charts.hourly) charts.hourly.destroy();
+        return;
+    }
     
     // Use the 24-hour data from our enhanced parsing
     const labels = hourlyData.map(h => `${h.hour}:00`);
@@ -1296,8 +829,8 @@ function updateHourlyChart(hourlyData) {
         type: 'line',
         data: chartData,
         options: {
-            responsive: true,
-            maintainAspectRatio: false,
+        responsive: true,
+        maintainAspectRatio: false,
             scales: {
                 x: {
                     type: 'category',
@@ -1309,9 +842,9 @@ function updateHourlyChart(hourlyData) {
                         borderWidth: 2
                     },
                     ticks: {
-                        font: {
-                            family: BRUTALIST_CONFIG.fontFamily,
-                            weight: BRUTALIST_CONFIG.fontWeight,
+                font: {
+                    family: BRUTALIST_CONFIG.fontFamily,
+                    weight: BRUTALIST_CONFIG.fontWeight,
                             size: 12
                         },
                         color: COLORS.black,
@@ -1344,10 +877,10 @@ function updateHourlyChart(hourlyData) {
                 }
             },
             plugins: {
-                legend: {
-                    display: false
-                },
-                tooltip: getBrutalistTooltipConfig()
+            legend: {
+                display: false
+            },
+            tooltip: getBrutalistTooltipConfig()
             }
         }
     });
@@ -1473,19 +1006,20 @@ function updateTransactionsTable(data) {
     const paginationControls = document.getElementById('paginationControls');
 
     if (!tbody) return;
-
+    
     // Calculate pagination
     const startIndex = (currentPage - 1) * pageSize;
     const endIndex = Math.min(startIndex + pageSize, allTransactions.length);
     const transactionsToShow = allTransactions.slice(startIndex, endIndex);
-
+    
     if (allTransactions.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="8" class="nb-text-center">
+                <td colspan="9" class="nb-text-center">
                     <div class="empty-state">
-                        <div class="empty-state-icon">📭</div>
-                        <p>No transactions found</p>
+                        <div class="empty-state-icon">📊</div>
+                        <p>No transaction data available</p>
+                        <p style="font-size: 0.8rem; color: #666; margin-top: 0.5rem;">Data will appear here once transactions are processed from raw files</p>
                     </div>
                 </td>
             </tr>
@@ -1506,10 +1040,11 @@ function updateTransactionsTable(data) {
         row.innerHTML = `
             <td>${formatDate(t.date)}</td>
             <td><span class="type-badge type-${(t.type || 'unknown').toLowerCase()}">${t.type || 'Unknown'}</span></td>
-            <td><span class="category-badge category-${(t.category || 'unknown').toLowerCase()}">${t.category || 'Unknown'}</span></td>
             <td class="formatted-number">${formatCurrency(t.amount)}</td>
-            <td class="nb-hidden nb-block-md">${t.phone || 'N/A'}</td>
-            <td class="nb-hidden nb-block-md">${t.reference || 'N/A'}</td>
+            <td>${formatPhone(t.phone)}</td>
+            <td>${t.reference || 'N/A'}</td>
+            <td>${t.recipient_name || 'N/A'}</td>
+            <td>${t.personal_id || 'N/A'}</td>
             <td><span class="status-badge status-${(t.status || 'unknown').toLowerCase()}">${t.status || 'Unknown'}</span></td>
             <td><button class="view-btn" onclick="viewTransactionDetails('${t.id || (startIndex + index)}')">VIEW</button></td>
         `;
@@ -1638,6 +1173,17 @@ function addEllipsis(container) {
     container.appendChild(ellipsis);
 }
 
+// Smooth scroll function for navigation
+function smoothScrollTo(elementId) {
+    const element = document.getElementById(elementId);
+    if (element) {
+        element.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start'
+        });
+    }
+}
+
 // Utility Functions
 function formatCurrency(amount) {
     return new Intl.NumberFormat('en-RW', {
@@ -1654,12 +1200,12 @@ function formatNumber(num) {
 
 function formatDate(dateStr) {
     if (!dateStr) return 'N/A';
-    const date = new Date(dateStr);
+        const date = new Date(dateStr);
     return date.toLocaleDateString('en-RW', {
-        month: 'short',
-        day: 'numeric',
+            month: 'short',
+            day: 'numeric',
         year: 'numeric'
-    });
+        });
 }
 
 function formatMonth(monthStr) {
@@ -1673,11 +1219,34 @@ function formatMonth(monthStr) {
 }
 
 function formatPhone(phone) {
-    if (!phone) return 'Unknown';
-    if (phone.length > 8) {
-        return phone.slice(0, -4) + '****';
+    if (!phone) return 'N/A';
+    
+    // Normalize phone number to Rwanda format (+250)
+    let normalizedPhone = phone;
+    
+    // If it starts with +256, convert to +250 (Rwanda)
+    if (normalizedPhone.startsWith('+256')) {
+        normalizedPhone = '+250' + normalizedPhone.substring(4);
     }
-    return phone;
+    // If it starts with 256, add +250
+    else if (normalizedPhone.startsWith('256')) {
+        normalizedPhone = '+250' + normalizedPhone.substring(3);
+    }
+    // If it starts with 250, add +
+    else if (normalizedPhone.startsWith('250')) {
+        normalizedPhone = '+' + normalizedPhone;
+    }
+    // If it doesn't start with +, add +250
+    else if (!normalizedPhone.startsWith('+')) {
+        normalizedPhone = '+250' + normalizedPhone;
+    }
+    
+    // Mask the last 4 digits for privacy
+    if (normalizedPhone.length > 8) {
+        return normalizedPhone.slice(0, -4) + '****';
+    }
+    
+    return normalizedPhone;
 }
 
 // UI Helper Functions
@@ -1741,40 +1310,92 @@ function viewTransactionDetails(transactionId) {
                     <div class="detail-item">
                         <label>ID:</label>
                         <span>${transaction.id || 'N/A'}</span>
-                    </div>
+                </div>
                     <div class="detail-item">
                         <label>Date:</label>
                         <span>${formatDate(transaction.date)}</span>
-                    </div>
+                </div>
                     <div class="detail-item">
                         <label>Type:</label>
                         <span class="type-badge type-${(transaction.type || 'unknown').toLowerCase()}">${transaction.type || 'Unknown'}</span>
-                    </div>
-                    <div class="detail-item">
-                        <label>Category:</label>
-                        <span class="category-badge category-${(transaction.category || 'unknown').toLowerCase()}">${transaction.category || 'Unknown'}</span>
-                    </div>
+                </div>
                     <div class="detail-item">
                         <label>Amount:</label>
                         <span class="formatted-number">${formatCurrency(transaction.amount)}</span>
-                    </div>
+                </div>
                     <div class="detail-item">
                         <label>Phone:</label>
-                        <span>${transaction.phone || 'N/A'}</span>
-                    </div>
+                        <span>${formatPhone(transaction.phone)}</span>
+                </div>
                     <div class="detail-item">
                         <label>Reference:</label>
                         <span>${transaction.reference || 'N/A'}</span>
-                    </div>
+                </div>
+                    <div class="detail-item">
+                        <label>Recipient Name:</label>
+                        <span>${transaction.recipient_name || (['DEPOSIT', 'WITHDRAWAL', 'Purchase', 'Airtime', 'Cash Out'].includes(transaction.type) ? 'Self' : 'N/A')}</span>
+                </div>
+                    <div class="detail-item">
+                        <label>Personal ID:</label>
+                        <span>${transaction.personal_id || (['DEPOSIT', 'WITHDRAWAL', 'Purchase', 'Airtime', 'Cash Out'].includes(transaction.type) ? 'Self' : 'N/A')}</span>
+                </div>
                     <div class="detail-item">
                         <label>Status:</label>
                         <span class="status-badge status-${(transaction.status || 'unknown').toLowerCase()}">${transaction.status || 'Unknown'}</span>
+                </div>
+                    ${transaction.type === 'DEPOSIT' ? `
+                    <div class="detail-item full-width">
+                        <label>Transaction Description:</label>
+                        <span>Money deposited into your account by Self</span>
                     </div>
+                    ` : ''}
+                    ${transaction.type === 'WITHDRAWAL' ? `
+                    <div class="detail-item full-width">
+                        <label>Transaction Description:</label>
+                        <span>Money withdrawn from your account by Self</span>
+                    </div>
+                    ` : ''}
+                    ${transaction.type === 'PAYMENT' ? `
+                    <div class="detail-item full-width">
+                        <label>Transaction Description:</label>
+                        <span>Payment sent to ${transaction.recipient_name || 'recipient'}</span>
+                    </div>
+                    ` : ''}
+                    ${transaction.type === 'Purchase' && transaction.category === 'Data Bundle' ? `
+                    <div class="detail-item full-width">
+                        <label>Transaction Description:</label>
+                        <span>Data bundle purchase for internet access</span>
+                    </div>
+                    ` : ''}
+                    ${transaction.type === 'Airtime' ? `
+                    <div class="detail-item full-width">
+                        <label>Transaction Description:</label>
+                        <span>Airtime purchase for ${transaction.phone || 'phone number'}</span>
+                    </div>
+                    ` : ''}
+                    ${transaction.type === 'Send' ? `
+                    <div class="detail-item full-width">
+                        <label>Transaction Description:</label>
+                        <span>Money sent to ${transaction.recipient_name || 'recipient'}</span>
+                    </div>
+                    ` : ''}
+                    ${transaction.type === 'Receive' ? `
+                    <div class="detail-item full-width">
+                        <label>Transaction Description:</label>
+                        <span>Money received from ${transaction.recipient_name || 'sender'}</span>
+                    </div>
+                    ` : ''}
+                    ${transaction.type === 'Cash Out' ? `
+                    <div class="detail-item full-width">
+                        <label>Transaction Description:</label>
+                        <span>Cash withdrawn from account</span>
+                    </div>
+                    ` : ''}
                     ${transaction.raw_data ? `
                     <div class="detail-item full-width">
                         <label>Original SMS Data:</label>
                         <textarea readonly>${transaction.raw_data}</textarea>
-                    </div>
+                </div>
                     ` : ''}
                     ${transaction.xml_attributes ? `
                     <div class="detail-item full-width">

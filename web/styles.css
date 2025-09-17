@@ -852,6 +852,12 @@ h1, h2, h3, h4, h5, h6 {
     background: var(--brutal-white);
 }
 
+#transactions .nb-table th,
+#transactions .nb-table td {
+    font-family: 'Public Sans', sans-serif;
+    font-weight: 600;
+}
+
 #transactions .nb-table th {
     background: var(--brutal-gray);
     color: var(--brutal-black);
@@ -1155,8 +1161,12 @@ h1, h2, h3, h4, h5, h6 {
     
     #transactions .nb-table th:nth-child(4),
     #transactions .nb-table th:nth-child(5),
+    #transactions .nb-table th:nth-child(6),
+    #transactions .nb-table th:nth-child(7),
     #transactions .nb-table td:nth-child(4),
-    #transactions .nb-table td:nth-child(5) {
+    #transactions .nb-table td:nth-child(5),
+    #transactions .nb-table td:nth-child(6),
+    #transactions .nb-table td:nth-child(7) {
         display: none;
     }
     
@@ -1352,7 +1362,11 @@ footer a {
     .nb-table th:nth-child(4),
     .nb-table td:nth-child(4),
     .nb-table th:nth-child(5),
-    .nb-table td:nth-child(5) {
+    .nb-table td:nth-child(5),
+    .nb-table th:nth-child(6),
+    .nb-table td:nth-child(6),
+    .nb-table th:nth-child(7),
+    .nb-table td:nth-child(7) {
         display: none;
     }
 }
@@ -1425,7 +1439,11 @@ footer a {
     .nb-table th:nth-child(4),
     .nb-table td:nth-child(4),
     .nb-table th:nth-child(5),
-    .nb-table td:nth-child(5) {
+    .nb-table td:nth-child(5),
+    .nb-table th:nth-child(6),
+    .nb-table td:nth-child(6),
+    .nb-table th:nth-child(7),
+    .nb-table td:nth-child(7) {
         display: none;
     }
 }
@@ -1911,7 +1929,9 @@ textarea:focus {
     .nb-table th:nth-child(5),
     .nb-table td:nth-child(5),
     .nb-table th:nth-child(6),
-    .nb-table td:nth-child(6) {
+    .nb-table td:nth-child(6),
+    .nb-table th:nth-child(7),
+    .nb-table td:nth-child(7) {
         display: none;
     }
     
@@ -1932,7 +1952,9 @@ textarea:focus {
     .nb-table th:nth-child(5),
     .nb-table td:nth-child(5),
     .nb-table th:nth-child(6),
-    .nb-table td:nth-child(6) {
+    .nb-table td:nth-child(6),
+    .nb-table th:nth-child(7),
+    .nb-table td:nth-child(7) {
         display: none;
     }
     
