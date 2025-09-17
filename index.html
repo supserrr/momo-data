@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MoMo Data Processing Dashboard | Team 11</title>
+    <meta name="description" content="Enterprise-level mobile money transaction analytics dashboard">
+    
+    <!-- NeoBrutalismCSS Framework -->
+    <link rel="stylesheet" href="https://unpkg.com/@neobrutalism/css@latest/dist/neobrutalism.min.css">
+    
+    <!-- Recommended Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Lexend+Mega:wght@400;700&family=Public+Sans:wght@400;600;800&display=swap" rel="stylesheet">
+    
+    <!-- Chart.js Library -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.2.1/dist/chart.umd.min.js"></script>
+    
+    <!-- Custom Styles for Chart Integration -->
+    <link rel="stylesheet" href="web/styles.css">
+    
+    <style>
+        body {
+            font-family: 'Public Sans', sans-serif;
+            background-color: #fff8e7;
+            margin: 0;
+            padding: 0;
+        }
+        
+        h1, h2, h3, h4 {
+            font-family: 'Lexend Mega', sans-serif;
+        }
+        
+        .hero-title {
+            font-size: clamp(2rem, 5vw, 3.5rem);
+            margin-bottom: 1rem;
+        }
+        
+        .stat-number {
+            font-family: 'Lexend Mega', sans-serif;
+            font-size: 2.5rem;
+            font-weight: 700;
+            line-height: 1;
+            margin: 0.5rem 0;
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 400px;
+            width: 100%;
+            padding: 1rem;
+            background: white;
+            border: 4px solid #000;
+            box-shadow: 8px 8px 0 rgba(0,0,0,1);
+            margin-bottom: 2rem;
+        }
+        
+        .main-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 1rem;
+        }
+        
+        /* Custom color classes */
+        .bg-yellow { background-color: #ffc947; }
+        .bg-pink { background-color: #ff90e8; }
+        .bg-mint { background-color: #90ffdc; }
+        .bg-purple { background-color: #b690ff; }
+        
+        /* Loading skeleton */
+        .skeleton {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 200% 100%;
+            animation: loading 1.5s infinite;
+        }
+        
+        @keyframes loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="nb-navbar" role="navigation" aria-label="Main navigation">
+        <div class="main-container nb-flex-row" style="justify-content: space-between; align-items: center; width: 100%;">
+            <a href="/" class="nb-navbar-brand" aria-label="MoMo Dashboard">
+                <strong>MoMo</strong> Analytics
+            </a>
+            <ul class="nb-navbar-nav" role="menubar">
+                <li class="nb-navbar-item" role="none">
+                    <a href="#dashboard" class="nb-navbar-link active" role="menuitem" aria-current="page">Dashboard</a>
+                </li>
+                <li class="nb-navbar-item" role="none">
+                    <a href="#transactions" class="nb-navbar-link" role="menuitem">Transactions</a>
+                </li>
+                <li class="nb-navbar-item" role="none">
+                    <a href="#analytics" class="nb-navbar-link" role="menuitem">Analytics</a>
+                </li>
+                <li class="nb-navbar-item" role="none">
+                    <a href="https://github.com/supserrr/momo-data" class="nb-navbar-link" role="menuitem" target="_blank">GitHub</a>
+                </li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="nb-p-4 nb-p-md-4" style="background-color: #ffc947; border-bottom: 4px solid #000;">
+        <div class="main-container">
+            <h1 class="hero-title nb-text-center">MoMo Transaction Analytics</h1>
+            <p class="nb-text-center nb-text-lg" style="max-width: 800px; margin: 0 auto;">
+                Real-time mobile money transaction processing and analytics platform. 
+                Built by <strong>Team 11</strong> for enterprise-scale data processing.
+            </p>
+        </div>
+    </section>
+
+    <!-- Key Metrics Section -->
+    <section class="nb-p-4" id="dashboard">
+        <div class="main-container">
+            <h2 class="nb-text-2xl nb-text-md-3xl nb-m-4">Key Metrics</h2>
+            
+            <div class="nb-grid-2 nb-grid-md-4" style="gap: 1.5rem;">
+                <!-- Total Transactions Card -->
+                <div class="nb-card bg-yellow">
+                    <div class="nb-card-content">
+                        <h4 class="nb-card-title">Total Transactions</h4>
+                        <p class="stat-number" id="totalTransactions">
+                            <span class="skeleton" style="display: inline-block; width: 100px; height: 40px;">Loading...</span>
+                        </p>
+                        <p class="nb-text-sm">All time volume</p>
+                    </div>
+                </div>
+                
+                <!-- Total Amount Card -->
+                <div class="nb-card bg-pink">
+                    <div class="nb-card-content">
+                        <h4 class="nb-card-title">Total Amount</h4>
+                        <p class="stat-number" id="totalAmount">
+                            <span class="skeleton" style="display: inline-block; width: 150px; height: 40px;">Loading...</span>
+                        </p>
+                        <p class="nb-text-sm">RWF processed</p>
+                    </div>
+                </div>
+                
+                <!-- Success Rate Card -->
+                <div class="nb-card bg-mint">
+                    <div class="nb-card-content">
+                        <h4 class="nb-card-title">Success Rate</h4>
+                        <p class="stat-number" id="successRate">
+                            <span class="skeleton" style="display: inline-block; width: 80px; height: 40px;">Loading...</span>
+                        </p>
+                        <p class="nb-text-sm">Transaction success</p>
+                    </div>
+                </div>
+                
+                <!-- Active Users Card -->
+                <div class="nb-card bg-purple">
+                    <div class="nb-card-content">
+                        <h4 class="nb-card-title">Active Users</h4>
+                        <p class="stat-number" id="activeUsers">
+                            <span class="skeleton" style="display: inline-block; width: 60px; height: 40px;">Loading...</span>
+                        </p>
+                        <p class="nb-text-sm">Unique accounts</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Charts Section -->
+    <section class="nb-p-4" id="analytics">
+        <div class="main-container">
+            <h2 class="nb-text-2xl nb-text-md-3xl nb-m-4">Analytics Overview</h2>
+            
+            <div class="nb-grid-1 nb-grid-md-2" style="gap: 2rem;">
+                <!-- Transaction Volume Chart -->
+                <div class="chart-container">
+                    <h3 class="nb-text-xl nb-m-2">Transaction Volume by Date</h3>
+                    <canvas id="volumeChart"></canvas>
+                </div>
+                
+                <!-- Category Distribution Chart -->
+                <div class="chart-container">
+                    <h3 class="nb-text-xl nb-m-2">Transaction Categories</h3>
+                    <canvas id="categoryChart"></canvas>
+                </div>
+            </div>
+            
+            <div class="nb-grid-1 nb-grid-md-2" style="gap: 2rem; margin-top: 2rem;">
+                <!-- Top Users Chart -->
+                <div class="chart-container">
+                    <h3 class="nb-text-xl nb-m-2">Top Users by Volume</h3>
+                    <canvas id="usersChart"></canvas>
+                </div>
+                
+                <!-- Hourly Distribution Chart -->
+                <div class="chart-container">
+                    <h3 class="nb-text-xl nb-m-2">Hourly Transaction Pattern</h3>
+                    <canvas id="hourlyChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Transactions Table Section -->
+    <section class="nb-p-4" id="transactions">
+        <div class="main-container">
+            <div class="nb-table-container">
+                <div class="nb-table-header">
+                    <h2 class="nb-text-xl">Recent Transactions</h2>
+                </div>
+                <div style="overflow-x: auto;">
+                    <table class="nb-table" id="transactionsTable">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Type</th>
+                                <th>Amount</th>
+                                <th>Sender</th>
+                                <th>Receiver</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="transactionsBody">
+                            <tr>
+                                <td colspan="6" class="nb-text-center">
+                                    <div class="nb-spinner" style="margin: 2rem auto;"></div>
+                                    <p>Loading transactions...</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="nb-table-footer" id="tableFooter">
+                    <span>Loading...</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer Section -->
+    <footer class="nb-p-4" style="background-color: #000; color: #fff; margin-top: 4rem;">
+        <div class="main-container">
+            <div class="nb-grid-1 nb-grid-md-3" style="gap: 2rem;">
+                <div>
+                    <h4 class="nb-text-lg" style="color: #ffc947;">MoMo Analytics</h4>
+                    <p>Enterprise-level mobile money transaction processing system</p>
+                </div>
+                <div>
+                    <h4 class="nb-text-lg" style="color: #ff90e8;">Team 11</h4>
+                    <p>Shima Serein - Lead Developer<br>
+                    David Shumbusho - Developer</p>
+                </div>
+                <div>
+                    <h4 class="nb-text-lg" style="color: #90ffdc;">Resources</h4>
+                    <p>
+                        <a href="https://github.com/supserrr/momo-data" style="color: #fff;" target="_blank">GitHub Repository</a><br>
+                        <a href="https://github.com/users/supserrr/projects/3/views/1" style="color: #fff;" target="_blank">Project Board</a>
+                    </p>
+                </div>
+            </div>
+            <div class="nb-text-center nb-m-4" style="border-top: 2px solid #333; padding-top: 2rem;">
+                <p>&copy; 2024 Team 11 - Enterprise Web Development</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Load Dashboard Data -->
+    <script src="web/chart_handler.js"></script>
+</body>
+</html>
