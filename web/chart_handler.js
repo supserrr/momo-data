@@ -46,47 +46,144 @@ Chart.defaults.plugins.legend.labels.textTransform = BRUTALIST_CONFIG.textTransf
 let charts = {};
 let allTransactions = [];
 let currentPage = 1;
-const TRANSACTIONS_PER_PAGE = 10;
+let pageSize = 10; // Default page size
+let totalPages = 1;
 
 // Initialize dashboard on DOM load
 document.addEventListener('DOMContentLoaded', function() {
     loadDashboardData();
     
     // Add load more button event listener
-    const loadMoreBtn = document.getElementById('loadMoreBtn');
-    if (loadMoreBtn) {
-        loadMoreBtn.addEventListener('click', loadMoreTransactions);
+    // Pagination event listeners
+    const pageSizeSelect = document.getElementById('pageSize');
+    if (pageSizeSelect) {
+        pageSizeSelect.addEventListener('change', handlePageSizeChange);
     }
     
-    // Auto-refresh every 30 seconds
-    setInterval(loadDashboardData, 30000);
+    const firstPageBtn = document.getElementById('firstPageBtn');
+    const prevPageBtn = document.getElementById('prevPageBtn');
+    const nextPageBtn = document.getElementById('nextPageBtn');
+    const lastPageBtn = document.getElementById('lastPageBtn');
+    
+    if (firstPageBtn) firstPageBtn.addEventListener('click', () => goToPage(1));
+    if (prevPageBtn) prevPageBtn.addEventListener('click', () => goToPage(currentPage - 1));
+    if (nextPageBtn) nextPageBtn.addEventListener('click', () => goToPage(currentPage + 1));
+    if (lastPageBtn) lastPageBtn.addEventListener('click', () => goToPage(totalPages));
+    
+    // Auto-refresh disabled - data loads on page load only
+    // setInterval(loadDashboardData, 30000);
 });
 
-// Load dashboard data from XML SMS backup
+// Load dashboard data from API
 async function loadDashboardData() {
     try {
-        showRefreshIndicator();
-        const response = await fetch('data/raw/modified_sms_v2.xml');
-        if (!response.ok) throw new Error('Failed to load SMS data');
+        // Load dashboard data for metrics and charts
+        const response = await fetch('http://localhost:8000/api/dashboard-data');
+        if (!response.ok) throw new Error('Failed to load dashboard data');
 
-        const xmlText = await response.text();
-        const data = parseSMSData(xmlText);
-        console.log('Parsed SMS data:', data);
-        console.log('Category distribution:', data.charts?.category_distribution);
+        const data = await response.json();
+        console.log('Dashboard data from API:', data);
         
-        // Store all transactions for pagination
-        allTransactions = data.transactions || [];
+        // Load monthly transaction data
+        const monthlyResponse = await fetch('http://localhost:8000/api/monthly-transactions');
+        if (!monthlyResponse.ok) throw new Error('Failed to load monthly data');
+        
+        const monthlyData = await monthlyResponse.json();
+        console.log('Monthly data from API:', monthlyData);
+        
+        // Load ALL transactions for the table using pagination (API limit is 100)
+        const allTransactionsData = [];
+        let offset = 0;
+        const limit = 100; // Use larger chunks for better performance
+        let hasMore = true;
+        let consecutiveErrors = 0;
+        
+        while (hasMore && consecutiveErrors < 3) {
+            try {
+                const transactionsResponse = await fetch(`http://localhost:8000/api/transactions?limit=${limit}&offset=${offset}`);
+                if (!transactionsResponse.ok) {
+                    console.warn(`API error at offset ${offset}, stopping pagination`);
+                    break;
+                }
+                
+                const batch = await transactionsResponse.json();
+                
+                // Check if we got an error response
+                if (batch.success === false) {
+                    console.warn(`API returned error at offset ${offset}, stopping pagination`);
+                    break;
+                }
+                
+                allTransactionsData.push(...batch);
+                
+                // If we got fewer than the limit, we've reached the end
+                hasMore = batch.length === limit;
+                offset += limit;
+                consecutiveErrors = 0; // Reset error counter on success
+                
+                // Safety check to prevent infinite loops
+                if (offset > 10000) break;
+                
+            } catch (error) {
+                console.warn(`Error fetching transactions at offset ${offset}:`, error);
+                consecutiveErrors++;
+                offset += limit; // Try next batch
+            }
+        }
+        
+        console.log('All transactions from API:', allTransactionsData.length);
+        
+        // Transform API data to match expected format
+        const transformedData = transformAPIData(data, monthlyData, allTransactionsData);
+        
+        // Store all transactions for pagination (use the full transaction list)
+        allTransactions = allTransactionsData || [];
         currentPage = 1;
+        totalPages = Math.ceil(allTransactions.length / pageSize);
         
-        updateKeyMetrics(data);
-        updateCharts(data);
-        updateTransactionsTable(data);
-        hideRefreshIndicator();
+        updateKeyMetrics(transformedData);
+        updateCharts(transformedData);
+        updateTransactionsTable(transformedData);
     } catch (error) {
-        console.error('Error loading SMS data:', error);
+        console.error('Error loading dashboard data:', error);
         // Load sample data as fallback
         loadSampleData();
-        hideRefreshIndicator();
+    }
+}
+
+// Manual refresh function for the refresh button
+async function refreshDashboardData() {
+    const refreshBtn = document.getElementById('refreshDataBtn');
+    if (refreshBtn) {
+        refreshBtn.disabled = true;
+        refreshBtn.innerHTML = 'Refreshing...';
+        refreshBtn.style.opacity = '0.7';
+    }
+    
+    try {
+        await loadDashboardData();
+        
+        // Show success feedback
+        if (refreshBtn) {
+            refreshBtn.innerHTML = 'Refreshed!';
+            setTimeout(() => {
+                refreshBtn.innerHTML = 'Refresh Data';
+                refreshBtn.disabled = false;
+                refreshBtn.style.opacity = '1';
+            }, 2000);
+        }
+    } catch (error) {
+        console.error('Error refreshing data:', error);
+        
+        // Show error feedback
+        if (refreshBtn) {
+            refreshBtn.innerHTML = 'Error';
+            setTimeout(() => {
+                refreshBtn.innerHTML = 'Refresh Data';
+                refreshBtn.disabled = false;
+                refreshBtn.style.opacity = '1';
+            }, 2000);
+        }
     }
 }
 
@@ -286,8 +383,280 @@ function parseTransactionFromSMS(body, timestamp, readableDate) {
     return transaction.amount > 0 ? transaction : null;
 }
 
+// Transform API data to match expected frontend format
+function transformAPIData(apiData, monthlyData = null, allTransactionsData = null) {
+    const { summary, categories, amount_distribution, recent_transactions } = apiData;
+    
+    // Use all transactions data if available, otherwise fall back to recent_transactions
+    const transactionsToUse = allTransactionsData || recent_transactions;
+    
+    // Transform categories to match expected format with additional data
+    const categoryDistribution = categories.map(cat => ({
+        category: cat.category,
+        count: cat.count,
+        total_amount: cat.total_amount || 0,
+        avg_amount: cat.avg_amount || 0,
+        min_amount: cat.min_amount || 0,
+        max_amount: cat.max_amount || 0
+    }));
+    
+    // Use monthly data from API if available, otherwise fallback to recent transactions
+    let monthlyStatsArray = [];
+    if (monthlyData && monthlyData.monthly_stats) {
+        monthlyStatsArray = monthlyData.monthly_stats.map(stats => ({
+            month: stats.month,
+            count: stats.count,
+            volume: stats.volume
+        }));
+    } else {
+        // Fallback: create monthly stats from transactions
+        const monthlyStats = {};
+        transactionsToUse.forEach(tx => {
+            const date = new Date(tx.date);
+            const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+            if (!monthlyStats[monthKey]) {
+                monthlyStats[monthKey] = { count: 0, volume: 0 };
+            }
+            monthlyStats[monthKey].count++;
+            monthlyStats[monthKey].volume += tx.amount;
+        });
+        
+        monthlyStatsArray = Object.entries(monthlyStats)
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([month, data]) => ({ 
+                month, 
+                count: data.count,
+                volume: data.volume
+            }));
+    }
+    
+    // Use hourly data from API if available, otherwise fallback to recent transactions
+    let hourlyPattern = Array.from({length: 24}, (_, i) => ({
+        hour: i,
+        count: 0,
+        volume: 0
+    }));
+    
+    if (monthlyData && monthlyData.hourly_pattern) {
+        // Reset the pattern and populate with API data
+        hourlyPattern.forEach(slot => { slot.count = 0; slot.volume = 0; });
+        monthlyData.hourly_pattern.forEach(hour_data => {
+            const hour = parseInt(hour_data.hour);
+            if (hour >= 0 && hour < 24) {
+                hourlyPattern[hour] = {
+                    hour: hour,
+                    count: hour_data.count,
+                    volume: hour_data.volume
+                };
+            }
+        });
+    } else {
+        // Fallback: distribute transactions across hours
+        transactionsToUse.forEach(tx => {
+            const hour = new Date(tx.date).getHours();
+            hourlyPattern[hour].count++;
+            hourlyPattern[hour].volume += tx.amount;
+        });
+    }
+    
+    // Create amount distribution data
+    const amountRanges = [
+        { range: '0-1,000', min: 0, max: 1000, count: 0 },
+        { range: '1,000-5,000', min: 1000, max: 5000, count: 0 },
+        { range: '5,000-10,000', min: 5000, max: 10000, count: 0 },
+        { range: '10,000-25,000', min: 10000, max: 25000, count: 0 },
+        { range: '25,000-50,000', min: 25000, max: 50000, count: 0 },
+        { range: '50,000+', min: 50000, max: Infinity, count: 0 }
+    ];
+    
+    transactionsToUse.forEach(tx => {
+        const amount = tx.amount;
+        for (let range of amountRanges) {
+            if (amount >= range.min && amount < range.max) {
+                range.count++;
+                break;
+            }
+        }
+    });
+    
+    return {
+        summary: {
+            total_transactions: summary.total_transactions,
+            total_amount: summary.total_amount,
+            average_transaction_amount: summary.average_transaction_amount,
+            success_rate: summary.success_rate,
+            successful_transactions: summary.successful_transactions,
+            failed_transactions: summary.failed_transactions,
+            pending_transactions: summary.pending_transactions,
+            last_updated: summary.last_updated
+        },
+        transactions: transactionsToUse.map(tx => ({
+            id: tx.id,
+            date: tx.date,
+            amount: tx.amount,
+            type: tx.type,
+            status: tx.status,
+            phone: tx.phone,
+            category: tx.category,
+            reference: tx.reference,
+            original_data: tx.original_data,
+            raw_data: tx.raw_data,
+            xml_tag: tx.xml_tag,
+            xml_attributes: tx.xml_attributes,
+            cleaned_at: tx.cleaned_at,
+            categorized_at: tx.categorized_at,
+            loaded_at: tx.loaded_at
+        })),
+        statistics: {
+            transactionTypes: categoryDistribution.reduce((acc, cat) => {
+                acc[cat.category] = cat.count;
+                return acc;
+            }, {})
+        },
+        charts: {
+            monthly_stats: monthlyStatsArray,
+            category_distribution: categoryDistribution,
+            hourly_pattern: hourlyPattern,
+            amount_distribution: amountRanges
+        }
+    };
+}
+
 // Load sample data for demonstration
 function loadSampleData() {
+    const sampleTransactions = [
+            {
+                id: 1,
+                date: '2024-01-15T10:30:00Z',
+                type: 'Transfer',
+                category: 'Transfer',
+                amount: 25000,
+                phone: '+250788123456',
+                reference: 'TXN001',
+                status: 'Success',
+                raw_data: 'You transferred 25000 RWF to John Doe. New balance: 50000 RWF',
+                xml_tag: 'sms',
+                xml_attributes: { address: 'M-Money', date: '1705312200000' }
+            },
+            {
+                id: 2,
+                date: '2024-01-15T09:45:00Z',
+                type: 'Payment',
+                category: 'Payment',
+                amount: 15000,
+                phone: '+250788234567',
+                reference: 'TXN002',
+                status: 'Success',
+                raw_data: 'Payment of 15000 RWF to Shop ABC. New balance: 35000 RWF',
+                xml_tag: 'sms',
+                xml_attributes: { address: 'M-Money', date: '1705309500000' }
+            },
+            {
+                id: 3,
+                date: '2024-01-15T09:15:00Z',
+                type: 'Withdrawal',
+                category: 'Withdrawal',
+                amount: 50000,
+                phone: '+250788345678',
+                reference: 'TXN003',
+                status: 'Pending',
+                raw_data: 'Withdrawal of 50000 RWF requested. Processing...',
+                xml_tag: 'sms',
+                xml_attributes: { address: 'M-Money', date: '1705307700000' }
+            },
+            {
+                id: 4,
+                date: '2024-01-15T08:30:00Z',
+                type: 'Transfer',
+                category: 'Transfer',
+                amount: 75000,
+                phone: '+250788456789',
+                reference: 'TXN004',
+                status: 'Success',
+                raw_data: 'You transferred 75000 RWF to Jane Smith. New balance: 125000 RWF',
+                xml_tag: 'sms',
+                xml_attributes: { address: 'M-Money', date: '1705305000000' }
+            },
+            {
+                id: 5,
+                date: '2024-01-15T08:00:00Z',
+                type: 'Payment',
+                category: 'Payment',
+                amount: 12000,
+                phone: '+250788567890',
+                reference: 'TXN005',
+                status: 'Failed',
+                raw_data: 'Payment failed. Insufficient balance.',
+                xml_tag: 'sms',
+                xml_attributes: { address: 'M-Money', date: '1705304400000' }
+            },
+            {
+                id: 6,
+                date: '2024-01-15T07:45:00Z',
+                type: 'Deposit',
+                category: 'Deposit',
+                amount: 100000,
+                phone: '+250788678901',
+                reference: 'TXN006',
+                status: 'Success',
+                raw_data: 'You received 100000 RWF from Bank Deposit. New balance: 200000 RWF',
+                xml_tag: 'sms',
+                xml_attributes: { address: 'M-Money', date: '1705303500000' }
+            },
+            {
+                id: 7,
+                date: '2024-01-15T07:20:00Z',
+                type: 'Transfer',
+                category: 'Transfer',
+                amount: 30000,
+                phone: '+250788789012',
+                reference: 'TXN007',
+                status: 'Success',
+                raw_data: 'You transferred 30000 RWF to Mike Johnson. New balance: 100000 RWF',
+                xml_tag: 'sms',
+                xml_attributes: { address: 'M-Money', date: '1705302000000' }
+            },
+            {
+                id: 8,
+                date: '2024-01-15T06:55:00Z',
+                type: 'Payment',
+                category: 'Payment',
+                amount: 8500,
+                phone: '+250788890123',
+                reference: 'TXN008',
+                status: 'Success',
+                raw_data: 'Payment of 8500 RWF to Restaurant XYZ. New balance: 130000 RWF',
+                xml_tag: 'sms',
+                xml_attributes: { address: 'M-Money', date: '1705300500000' }
+            },
+            {
+                id: 9,
+                date: '2024-01-15T06:30:00Z',
+                type: 'Withdrawal',
+                category: 'Withdrawal',
+                amount: 45000,
+                phone: '+250788901234',
+                reference: 'TXN009',
+                status: 'Pending',
+                raw_data: 'Withdrawal of 45000 RWF requested. Processing...',
+                xml_tag: 'sms',
+                xml_attributes: { address: 'M-Money', date: '1705299000000' }
+            },
+            {
+                id: 10,
+                date: '2024-01-15T06:00:00Z',
+                type: 'Transfer',
+                category: 'Transfer',
+                amount: 18000,
+                phone: '+250788012345',
+                reference: 'TXN010',
+                status: 'Success',
+                raw_data: 'You transferred 18000 RWF to Sarah Wilson. New balance: 138500 RWF',
+                xml_tag: 'sms',
+                xml_attributes: { address: 'M-Money', date: '1705297200000' }
+            }
+        ];
+    
     const sampleData = {
         summary: {
             total_transactions: 1247,
@@ -295,88 +664,21 @@ function loadSampleData() {
             success_rate: 94.2,
             active_users: 89
         },
-        recent_transactions: [
-            {
-                date: '2024-01-15T10:30:00Z',
-                category: 'Transfer',
-                amount: 25000,
-                sender_phone: '+250788123456',
-                receiver_phone: '+250789654321',
-                status: 'Success'
-            },
-            {
-                date: '2024-01-15T09:45:00Z',
-                category: 'Payment',
-                amount: 15000,
-                sender_phone: '+250788234567',
-                receiver_phone: '+250789765432',
-                status: 'Success'
-            },
-            {
-                date: '2024-01-15T09:15:00Z',
-                category: 'Withdrawal',
-                amount: 50000,
-                sender_phone: '+250788345678',
-                receiver_phone: '+250789876543',
-                status: 'Pending'
-            },
-            {
-                date: '2024-01-15T08:30:00Z',
-                category: 'Transfer',
-                amount: 75000,
-                sender_phone: '+250788456789',
-                receiver_phone: '+250789987654',
-                status: 'Success'
-            },
-            {
-                date: '2024-01-15T08:00:00Z',
-                category: 'Payment',
-                amount: 12000,
-                sender_phone: '+250788567890',
-                receiver_phone: '+250789098765',
-                status: 'Failed'
-            },
-            {
-                date: '2024-01-15T07:45:00Z',
-                category: 'Deposit',
-                amount: 100000,
-                sender_phone: '+250788678901',
-                receiver_phone: '+250789109876',
-                status: 'Success'
-            },
-            {
-                date: '2024-01-15T07:20:00Z',
-                category: 'Transfer',
-                amount: 30000,
-                sender_phone: '+250788789012',
-                receiver_phone: '+250789210987',
-                status: 'Success'
-            },
-            {
-                date: '2024-01-15T06:55:00Z',
-                category: 'Payment',
-                amount: 8500,
-                sender_phone: '+250788890123',
-                receiver_phone: '+250789321098',
-                status: 'Success'
-            },
-            {
-                date: '2024-01-15T06:30:00Z',
-                category: 'Withdrawal',
-                amount: 45000,
-                sender_phone: '+250788901234',
-                receiver_phone: '+250789432109',
-                status: 'Pending'
-            },
-            {
-                date: '2024-01-15T06:00:00Z',
-                category: 'Transfer',
-                amount: 18000,
-                sender_phone: '+250788012345',
-                receiver_phone: '+250789543210',
-                status: 'Success'
-            }
+        categories: [
+            { category: 'Transfer', count: 45, total_amount: 500000, avg_amount: 11111, min_amount: 1000, max_amount: 100000 },
+            { category: 'Payment', count: 30, total_amount: 300000, avg_amount: 10000, min_amount: 500, max_amount: 50000 },
+            { category: 'Withdrawal', count: 15, total_amount: 200000, avg_amount: 13333, min_amount: 2000, max_amount: 100000 },
+            { category: 'Deposit', count: 10, total_amount: 100000, avg_amount: 10000, min_amount: 1000, max_amount: 50000 }
         ],
+        amount_distribution: [
+            { range: '0-1,000', count: 5 },
+            { range: '1,000-5,000', count: 15 },
+            { range: '5,000-10,000', count: 25 },
+            { range: '10,000-25,000', count: 30 },
+            { range: '25,000-50,000', count: 20 },
+            { range: '50,000+', count: 5 }
+        ],
+        recent_transactions: sampleTransactions,
                     charts: {
                         volume_by_date: {
                             labels: ['2024-01-09', '2024-01-10', '2024-01-11', '2024-01-12', '2024-01-13', '2024-01-14', '2024-01-15'],
@@ -396,12 +698,54 @@ function loadSampleData() {
     };
     
     // Store sample transactions for pagination
-    allTransactions = sampleData.recent_transactions || [];
+    allTransactions = sampleTransactions;
     currentPage = 1;
+    totalPages = Math.ceil(allTransactions.length / pageSize);
     
-    updateKeyMetrics(sampleData);
-    updateCharts(sampleData);
-    updateTransactionsTable(sampleData);
+    // Create sample monthly data
+    const sampleMonthlyData = {
+        monthly_stats: [
+            { month: '2024-01', count: 150, volume: 2500000 },
+            { month: '2024-02', count: 180, volume: 3000000 },
+            { month: '2024-03', count: 200, volume: 3500000 },
+            { month: '2024-04', count: 220, volume: 4000000 },
+            { month: '2024-05', count: 250, volume: 4500000 },
+            { month: '2024-06', count: 280, volume: 5000000 }
+        ],
+        hourly_pattern: [
+            { hour: 0, count: 2, volume: 50000 },
+            { hour: 1, count: 1, volume: 25000 },
+            { hour: 2, count: 0, volume: 0 },
+            { hour: 3, count: 1, volume: 30000 },
+            { hour: 4, count: 2, volume: 40000 },
+            { hour: 5, count: 3, volume: 60000 },
+            { hour: 6, count: 5, volume: 100000 },
+            { hour: 7, count: 8, volume: 150000 },
+            { hour: 8, count: 12, volume: 200000 },
+            { hour: 9, count: 15, volume: 250000 },
+            { hour: 10, count: 18, volume: 300000 },
+            { hour: 11, count: 20, volume: 350000 },
+            { hour: 12, count: 22, volume: 400000 },
+            { hour: 13, count: 25, volume: 450000 },
+            { hour: 14, count: 28, volume: 500000 },
+            { hour: 15, count: 30, volume: 550000 },
+            { hour: 16, count: 32, volume: 600000 },
+            { hour: 17, count: 35, volume: 650000 },
+            { hour: 18, count: 38, volume: 700000 },
+            { hour: 19, count: 40, volume: 750000 },
+            { hour: 20, count: 35, volume: 650000 },
+            { hour: 21, count: 30, volume: 550000 },
+            { hour: 22, count: 25, volume: 450000 },
+            { hour: 23, count: 20, volume: 350000 }
+        ]
+    };
+    
+    // Transform sample data to match expected format
+    const transformedData = transformAPIData(sampleData, sampleMonthlyData, sampleTransactions);
+    
+    updateKeyMetrics(transformedData);
+    updateCharts(transformedData);
+    updateTransactionsTable(transformedData);
 }
 
 // Update key metrics cards
@@ -441,15 +785,16 @@ function formatMetricValue(key, value) {
 // Update all charts
 function updateCharts(data) {
     // Use chart data from parsed SMS data
-    updateVolumeChart(data.charts?.daily_stats || []);
+    updateVolumeChart(data.charts?.monthly_stats || []);
     updateCategoryChart(data.charts?.category_distribution || []);
+    updateAmountChart(data.charts?.amount_distribution || []);
     updateHourlyChart(data.charts?.hourly_pattern || []);
 }
 
 // Create chart data from real data structure
 function createChartDataFromRealData(data) {
     const chartData = {
-        daily_stats: [],
+        monthly_stats: [],
         category_distribution: [],
         hourly_pattern: []
     };
@@ -462,13 +807,26 @@ function createChartDataFromRealData(data) {
         }));
     }
     
-    // Create sample daily stats (since real data doesn't have this)
+    // Create monthly stats from transactions
     if (data.transactions && data.transactions.length > 0) {
-        const dates = [...new Set(data.transactions.map(t => t.date.split('T')[0]))].sort();
-        chartData.daily_stats = dates.map(date => ({
-            date: date,
-            count: data.transactions.filter(t => t.date.startsWith(date)).length
-        }));
+        const monthlyStats = {};
+        data.transactions.forEach(tx => {
+            const date = new Date(tx.date);
+            const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+            if (!monthlyStats[monthKey]) {
+                monthlyStats[monthKey] = { count: 0, volume: 0 };
+            }
+            monthlyStats[monthKey].count++;
+            monthlyStats[monthKey].volume += tx.amount;
+        });
+        
+        chartData.monthly_stats = Object.entries(monthlyStats)
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([month, data]) => ({
+                month: month,
+                count: data.count,
+                volume: data.volume
+            }));
     }
     
     // Create sample hourly pattern (since real data doesn't have this)
@@ -486,32 +844,177 @@ function createChartDataFromRealData(data) {
     return chartData;
 }
 
-// Volume by Date Chart with Brutalist Styling
-function updateVolumeChart(dailyStats) {
+// Volume by Month Chart with Brutalist Styling
+function updateVolumeChart(monthlyStats) {
     const ctx = document.getElementById('volumeChart');
     if (!ctx) return;
     
     const chartData = {
-        labels: dailyStats.map(d => formatDate(d.date)),
+        labels: monthlyStats.map(d => formatMonth(d.month)),
         datasets: [{
             label: 'Transaction Count',
-            data: dailyStats.map(d => d.count),
-            backgroundColor: COLORS.yellow,
-            borderColor: COLORS.black,
-            borderWidth: BRUTALIST_CONFIG.borderWidth,
-            barThickness: 40,
-            borderSkipped: false,
-            borderRadius: 0,
-            borderJoinStyle: 'miter'
+            data: monthlyStats.map(d => d.count),
+            backgroundColor: COLORS.blue,
+            borderColor: COLORS.blue,
+            borderWidth: 4,
+            fill: false,
+            tension: 0,
+            pointRadius: 8,
+            pointBackgroundColor: COLORS.white,
+            pointBorderColor: COLORS.blue,
+            pointBorderWidth: 3,
+            pointHoverRadius: 12,
+            pointStyle: 'rect',
+            borderJoinStyle: 'miter',
+            borderCapStyle: 'square',
+            yAxisID: 'y'
+        }, {
+            label: 'Volume (RWF)',
+            data: monthlyStats.map(d => d.volume || 0),
+            backgroundColor: COLORS.orange,
+            borderColor: COLORS.orange,
+            borderWidth: 4,
+            fill: false,
+            tension: 0,
+            pointRadius: 6,
+            pointBackgroundColor: COLORS.white,
+            pointBorderColor: COLORS.orange,
+            pointBorderWidth: 3,
+            pointHoverRadius: 10,
+            pointStyle: 'circle',
+            borderJoinStyle: 'miter',
+            borderCapStyle: 'square',
+            yAxisID: 'y1'
         }]
     };
     
     if (charts.volume) charts.volume.destroy();
     
     charts.volume = new Chart(ctx, {
-        type: 'bar',
+        type: 'line',
         data: chartData,
-        options: getBrutalistBarChartOptions('Transaction Volume by Date', false)
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top',
+                    labels: {
+                        font: {
+                            family: BRUTALIST_CONFIG.fontFamily,
+                            size: 14,
+                            weight: BRUTALIST_CONFIG.fontWeight
+                        },
+                        textTransform: BRUTALIST_CONFIG.textTransform,
+                        color: COLORS.black,
+                        padding: 20
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const label = context.dataset.label || '';
+                            const value = context.parsed.y;
+                            if (label.includes('Volume')) {
+                                return `${label}: ${formatCurrency(value)}`;
+                            }
+                            return `${label}: ${value}`;
+                        }
+                    },
+                    backgroundColor: COLORS.white,
+                    titleColor: COLORS.black,
+                    bodyColor: COLORS.black,
+                    borderColor: COLORS.black,
+                    borderWidth: 2,
+                    titleFont: {
+                        family: BRUTALIST_CONFIG.fontFamily,
+                        weight: BRUTALIST_CONFIG.fontWeight,
+                        size: 14
+                    },
+                    bodyFont: {
+                        family: BRUTALIST_CONFIG.fontFamily,
+                        weight: BRUTALIST_CONFIG.fontWeight,
+                        size: 12
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    type: 'category',
+                    grid: {
+                        color: COLORS.gray,
+                        lineWidth: 1,
+                        drawBorder: true,
+                        borderColor: COLORS.black,
+                        borderWidth: 2
+                    },
+                    ticks: {
+                        font: {
+                            family: BRUTALIST_CONFIG.fontFamily,
+                            weight: BRUTALIST_CONFIG.fontWeight,
+                            size: 12
+                        },
+                        textTransform: BRUTALIST_CONFIG.textTransform,
+                        color: COLORS.black
+                    }
+                },
+                y: {
+                    type: 'linear',
+                    display: true,
+                    position: 'left',
+                    beginAtZero: true,
+                    suggestedMin: 0,
+                    suggestedMax: undefined,
+                    grid: {
+                        color: COLORS.gray,
+                        lineWidth: 1,
+                        drawBorder: true,
+                        borderColor: COLORS.black,
+                        borderWidth: 2
+                    },
+                    ticks: {
+                        font: {
+                            family: BRUTALIST_CONFIG.fontFamily,
+                            weight: BRUTALIST_CONFIG.fontWeight,
+                            size: 12
+                        },
+                        textTransform: BRUTALIST_CONFIG.textTransform,
+                        color: COLORS.black,
+                        stepSize: undefined,
+                        precision: 0
+                    }
+                },
+                y1: {
+                    type: 'linear',
+                    display: true,
+                    position: 'right',
+                    beginAtZero: true,
+                    suggestedMin: 0,
+                    suggestedMax: undefined,
+                    grid: {
+                        drawOnChartArea: false,
+                        drawBorder: true,
+                        borderColor: COLORS.black,
+                        borderWidth: 2
+                    },
+                    ticks: {
+                        font: {
+                            family: BRUTALIST_CONFIG.fontFamily,
+                            weight: BRUTALIST_CONFIG.fontWeight,
+                            size: 12
+                        },
+                        textTransform: BRUTALIST_CONFIG.textTransform,
+                        color: COLORS.black,
+                        stepSize: undefined,
+                        precision: 0,
+                        callback: function(value) {
+                            return formatCurrency(value);
+                        }
+                    }
+                }
+            }
+        }
     });
 }
 
@@ -525,7 +1028,7 @@ function updateCategoryChart(categories) {
     const chartData = {
         labels: categories.map(c => c.category.toUpperCase()),
         datasets: [{
-            label: 'Transactions',
+            label: 'Transaction Count',
             data: categories.map(c => c.count),
             backgroundColor: [
                 COLORS.yellow,
@@ -564,24 +1067,187 @@ function updateCategoryChart(categories) {
                         color: COLORS.black,
                         padding: 20,
                         usePointStyle: true,
-                        pointStyle: 'rect'
+                        pointStyle: 'rect',
+                        generateLabels: function(chart) {
+                            const data = chart.data;
+                            if (data.labels.length && data.datasets.length) {
+                                return data.labels.map((label, i) => {
+                                    const dataset = data.datasets[0];
+                                    const value = dataset.data[i];
+                                    const total = dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = ((value / total) * 100).toFixed(1);
+                                    return {
+                                        text: `${label}: ${value} (${percentage}%)`,
+                                        fillStyle: dataset.backgroundColor[i],
+                                        strokeStyle: dataset.borderColor,
+                                        lineWidth: dataset.borderWidth,
+                                        hidden: false,
+                                        index: i
+                                    };
+                                });
+                            }
+                            return [];
+                        }
                     }
                 },
-                tooltip: getBrutalistTooltipConfig()
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const label = context.label || '';
+                            const value = context.parsed;
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percentage = ((value / total) * 100).toFixed(1);
+                            const category = categories[context.dataIndex];
+                            return [
+                                `${label}: ${value} transactions (${percentage}%)`,
+                                `Total Amount: ${formatCurrency(category.total_amount || 0)}`,
+                                `Avg Amount: ${formatCurrency(category.avg_amount || 0)}`,
+                                `Min: ${formatCurrency(category.min_amount || 0)}`,
+                                `Max: ${formatCurrency(category.max_amount || 0)}`
+                            ];
+                        }
+                    },
+                    backgroundColor: COLORS.white,
+                    titleColor: COLORS.black,
+                    bodyColor: COLORS.black,
+                    borderColor: COLORS.black,
+                    borderWidth: 2,
+                    titleFont: {
+                        family: BRUTALIST_CONFIG.fontFamily,
+                        weight: BRUTALIST_CONFIG.fontWeight,
+                        size: 14
+                    },
+                    bodyFont: {
+                        family: BRUTALIST_CONFIG.fontFamily,
+                        weight: BRUTALIST_CONFIG.fontWeight,
+                        size: 12
+                    }
+                }
             }
         }
     });
 }
 
-// Top Users Chart removed - no longer needed
+// Amount Distribution Chart with Brutalist Styling
+function updateAmountChart(amountData) {
+    const ctx = document.getElementById('amountChart');
+    if (!ctx) return;
+    
+    console.log('Amount chart data:', amountData);
+    
+    const chartData = {
+        labels: amountData.map(a => a.range),
+        datasets: [{
+            label: 'Transaction Count',
+            data: amountData.map(a => a.count),
+            backgroundColor: [
+                COLORS.yellow,
+                COLORS.pink,
+                COLORS.mint,
+                COLORS.purple,
+                COLORS.blue,
+                COLORS.orange
+            ],
+            borderColor: COLORS.black,
+            borderWidth: BRUTALIST_CONFIG.borderWidth,
+            barThickness: 40,
+            borderSkipped: false,
+            borderRadius: 0,
+            borderJoinStyle: 'miter'
+        }]
+    };
+    
+    if (charts.amount) charts.amount.destroy();
+    
+    charts.amount = new Chart(ctx, {
+        type: 'bar',
+        data: chartData,
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top',
+                    labels: {
+                        font: {
+                            family: BRUTALIST_CONFIG.fontFamily,
+                            size: 14,
+                            weight: BRUTALIST_CONFIG.fontWeight
+                        },
+                        textTransform: BRUTALIST_CONFIG.textTransform,
+                        color: COLORS.black,
+                        padding: 20
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const label = context.label || '';
+                            const value = context.parsed.y;
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percentage = ((value / total) * 100).toFixed(1);
+                            return `${label}: ${value} transactions (${percentage}%)`;
+                        }
+                    },
+                    backgroundColor: COLORS.white,
+                    titleColor: COLORS.black,
+                    bodyColor: COLORS.black,
+                    borderColor: COLORS.black,
+                    borderWidth: 2,
+                    titleFont: {
+                        family: BRUTALIST_CONFIG.fontFamily,
+                        weight: BRUTALIST_CONFIG.fontWeight,
+                        size: 14
+                    },
+                    bodyFont: {
+                        family: BRUTALIST_CONFIG.fontFamily,
+                        weight: BRUTALIST_CONFIG.fontWeight,
+                        size: 12
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: {
+                        display: false
+                    },
+                    ticks: {
+                        font: {
+                            family: BRUTALIST_CONFIG.fontFamily,
+                            weight: BRUTALIST_CONFIG.fontWeight,
+                            size: 12
+                        },
+                        textTransform: BRUTALIST_CONFIG.textTransform
+                    }
+                },
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        color: COLORS.black,
+                        lineWidth: 2
+                    },
+                    ticks: {
+                        font: {
+                            family: BRUTALIST_CONFIG.fontFamily,
+                            weight: BRUTALIST_CONFIG.fontWeight,
+                            size: 12
+                        },
+                        textTransform: BRUTALIST_CONFIG.textTransform
+                    }
+                }
+            }
+        }
+    });
+}
 
 // Hourly Pattern Chart with Brutalist Styling
 function updateHourlyChart(hourlyData) {
     const ctx = document.getElementById('hourlyChart');
     if (!ctx) return;
     
-    // Use the 4-hour interval data from our enhanced parsing
-    const labels = hourlyData.map(h => h.hour);
+    // Use the 24-hour data from our enhanced parsing
+    const labels = hourlyData.map(h => `${h.hour}:00`);
     const countData = hourlyData.map(h => h.count || 0);
     const volumeData = hourlyData.map(h => h.volume || 0);
     
@@ -590,15 +1256,15 @@ function updateHourlyChart(hourlyData) {
         datasets: [{
             label: 'Transaction Count',
             data: countData,
-            backgroundColor: COLORS.brutalPurple,
-            borderColor: COLORS.brutalBlack,
-            borderWidth: BRUTALIST_CONFIG.borderWidth,
-            fill: true,
-            tension: 0.1,
+            backgroundColor: COLORS.mint,
+            borderColor: COLORS.mint,
+            borderWidth: 4,
+            fill: false,
+            tension: 0,
             pointRadius: 8,
-            pointBackgroundColor: COLORS.brutalWhite,
-            pointBorderColor: COLORS.brutalBlack,
-            pointBorderWidth: BRUTALIST_CONFIG.borderWidth,
+            pointBackgroundColor: COLORS.white,
+            pointBorderColor: COLORS.mint,
+            pointBorderWidth: 3,
             pointHoverRadius: 12,
             pointStyle: 'rect',
             borderJoinStyle: 'miter',
@@ -607,15 +1273,15 @@ function updateHourlyChart(hourlyData) {
         }, {
             label: 'Transaction Volume (RWF)',
             data: volumeData,
-            backgroundColor: COLORS.brutalBlue,
-            borderColor: COLORS.brutalBlack,
-            borderWidth: BRUTALIST_CONFIG.borderWidth,
+            backgroundColor: COLORS.purple,
+            borderColor: COLORS.purple,
+            borderWidth: 4,
             fill: false,
-            tension: 0.1,
+            tension: 0,
             pointRadius: 6,
-            pointBackgroundColor: COLORS.brutalWhite,
-            pointBorderColor: COLORS.brutalBlack,
-            pointBorderWidth: BRUTALIST_CONFIG.borderWidth,
+            pointBackgroundColor: COLORS.white,
+            pointBorderColor: COLORS.purple,
+            pointBorderWidth: 3,
             pointHoverRadius: 10,
             pointStyle: 'circle',
             borderJoinStyle: 'miter',
@@ -634,11 +1300,13 @@ function updateHourlyChart(hourlyData) {
             maintainAspectRatio: false,
             scales: {
                 x: {
+                    type: 'category',
                     grid: {
-                        color: COLORS.black,
-                        lineWidth: 2,
+                        color: COLORS.gray,
+                        lineWidth: 1,
                         drawBorder: true,
-                        borderColor: COLORS.black
+                        borderColor: COLORS.black,
+                        borderWidth: 2
                     },
                     ticks: {
                         font: {
@@ -649,20 +1317,19 @@ function updateHourlyChart(hourlyData) {
                         color: COLORS.black,
                         maxRotation: 45,
                         minRotation: 45
-                    },
-                    border: {
-                        display: true,
-                        color: COLORS.black,
-                        width: BRUTALIST_CONFIG.borderWidth
                     }
                 },
                 y: {
+                    type: 'linear',
                     beginAtZero: true,
+                    suggestedMin: 0,
+                    suggestedMax: undefined,
                     grid: {
-                        color: COLORS.black,
-                        lineWidth: 2,
+                        color: COLORS.gray,
+                        lineWidth: 1,
                         drawBorder: true,
-                        borderColor: COLORS.black
+                        borderColor: COLORS.black,
+                        borderWidth: 2
                     },
                     ticks: {
                         font: {
@@ -670,12 +1337,9 @@ function updateHourlyChart(hourlyData) {
                             weight: BRUTALIST_CONFIG.fontWeight,
                             size: 12
                         },
-                        color: COLORS.black
-                    },
-                    border: {
-                        display: true,
                         color: COLORS.black,
-                        width: BRUTALIST_CONFIG.borderWidth
+                        stepSize: undefined,
+                        precision: 0
                     }
                 }
             },
@@ -806,20 +1470,19 @@ function getTooltipConfig() {
 function updateTransactionsTable(data) {
     const tbody = document.getElementById('transactionsBody');
     const tableInfo = document.getElementById('tableInfo');
-    const loadMoreBtn = document.getElementById('loadMoreBtn');
+    const paginationControls = document.getElementById('paginationControls');
 
     if (!tbody) return;
 
-    // Get transactions for current page
-    const startIndex = (currentPage - 1) * TRANSACTIONS_PER_PAGE;
-    const endIndex = startIndex + TRANSACTIONS_PER_PAGE;
-    const transactionsToShow = allTransactions.slice(0, endIndex);
-    const hasMore = endIndex < allTransactions.length;
+    // Calculate pagination
+    const startIndex = (currentPage - 1) * pageSize;
+    const endIndex = Math.min(startIndex + pageSize, allTransactions.length);
+    const transactionsToShow = allTransactions.slice(startIndex, endIndex);
 
-    if (transactionsToShow.length === 0) {
+    if (allTransactions.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="6" class="nb-text-center">
+                <td colspan="8" class="nb-text-center">
                     <div class="empty-state">
                         <div class="empty-state-icon">📭</div>
                         <p>No transactions found</p>
@@ -828,7 +1491,7 @@ function updateTransactionsTable(data) {
             </tr>
         `;
         tableInfo.innerHTML = '<span>No transactions to display</span>';
-        loadMoreBtn.style.display = 'none';
+        paginationControls.style.display = 'none';
         return;
     }
 
@@ -836,52 +1499,143 @@ function updateTransactionsTable(data) {
     tbody.innerHTML = '';
 
     // Add transactions for current page
-    const newTransactions = allTransactions.slice(startIndex, endIndex);
-    newTransactions.forEach((t, index) => {
+    transactionsToShow.forEach((t, index) => {
         const row = document.createElement('tr');
         row.className = 'animate-slide-in';
-        row.style.animationDelay = `${index * 0.1}s`;
+        row.style.animationDelay = `${index * 0.05}s`;
         row.innerHTML = `
             <td>${formatDate(t.date)}</td>
-            <td>${t.type || t.category || 'Unknown'}</td>
+            <td><span class="type-badge type-${(t.type || 'unknown').toLowerCase()}">${t.type || 'Unknown'}</span></td>
+            <td><span class="category-badge category-${(t.category || 'unknown').toLowerCase()}">${t.category || 'Unknown'}</span></td>
             <td class="formatted-number">${formatCurrency(t.amount)}</td>
-            <td>${t.sender || t.sender_phone || t.phone || 'N/A'}</td>
-            <td>${t.recipient || t.receiver_phone || 'N/A'}</td>
-            <td><span class="status-badge status-${t.status.toLowerCase()}">${t.status}</span></td>
+            <td class="nb-hidden nb-block-md">${t.phone || 'N/A'}</td>
+            <td class="nb-hidden nb-block-md">${t.reference || 'N/A'}</td>
+            <td><span class="status-badge status-${(t.status || 'unknown').toLowerCase()}">${t.status || 'Unknown'}</span></td>
+            <td><button class="view-btn" onclick="viewTransactionDetails('${t.id || (startIndex + index)}')">VIEW</button></td>
         `;
         tbody.appendChild(row);
     });
 
-    // Update table info and load more button
-    tableInfo.innerHTML = `<span>Showing ${transactionsToShow.length} of ${allTransactions.length} total transactions</span>`;
+    // Update table info
+    const startItem = allTransactions.length > 0 ? startIndex + 1 : 0;
+    const endItem = endIndex;
+    tableInfo.innerHTML = `<span>Showing ${startItem}-${endItem} of ${allTransactions.length} total transactions</span>`;
     
-    if (hasMore) {
-        loadMoreBtn.style.display = 'block';
-        loadMoreBtn.disabled = false;
-    } else {
-        loadMoreBtn.style.display = 'none';
+    // Update pagination controls
+    updatePaginationControls();
+}
+
+// Pagination functions
+function goToPage(page) {
+    if (page < 1 || page > totalPages) return;
+    
+    currentPage = page;
+    updateTransactionsTable();
+    
+    // Scroll to top of table
+    const table = document.getElementById('transactionsTable');
+    if (table) {
+        table.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 }
 
-// Load more transactions
-function loadMoreTransactions() {
-    const loadMoreBtn = document.getElementById('loadMoreBtn');
+function handlePageSizeChange() {
+    const pageSizeSelect = document.getElementById('pageSize');
+    if (pageSizeSelect) {
+        pageSize = parseInt(pageSizeSelect.value);
+        currentPage = 1;
+        totalPages = Math.ceil(allTransactions.length / pageSize);
+        updateTransactionsTable();
+    }
+}
+
+function updatePaginationControls() {
+    const paginationControls = document.getElementById('paginationControls');
+    const firstPageBtn = document.getElementById('firstPageBtn');
+    const prevPageBtn = document.getElementById('prevPageBtn');
+    const nextPageBtn = document.getElementById('nextPageBtn');
+    const lastPageBtn = document.getElementById('lastPageBtn');
+    const pageNumbers = document.getElementById('pageNumbers');
     
-    if (loadMoreBtn) {
-        loadMoreBtn.disabled = true;
-        loadMoreBtn.textContent = 'Loading...';
+    if (!paginationControls) return;
+    
+    // Show pagination controls if there are multiple pages
+    if (totalPages > 1) {
+        paginationControls.style.display = 'flex';
+    } else {
+        paginationControls.style.display = 'none';
+        return;
     }
     
-    // Simulate loading delay for better UX
-    setTimeout(() => {
-        currentPage++;
-        updateTransactionsTable({});
-        
-        if (loadMoreBtn) {
-            loadMoreBtn.disabled = false;
-            loadMoreBtn.textContent = 'Load More Transactions';
+    // Update navigation buttons
+    if (firstPageBtn) {
+        firstPageBtn.disabled = currentPage === 1;
+    }
+    if (prevPageBtn) {
+        prevPageBtn.disabled = currentPage === 1;
+    }
+    if (nextPageBtn) {
+        nextPageBtn.disabled = currentPage === totalPages;
+    }
+    if (lastPageBtn) {
+        lastPageBtn.disabled = currentPage === totalPages;
+    }
+    
+    // Generate page numbers
+    if (pageNumbers) {
+        pageNumbers.innerHTML = '';
+        generatePageNumbers(pageNumbers);
+    }
+}
+
+function generatePageNumbers(container) {
+    const maxVisiblePages = 7;
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+    
+    // Adjust start page if we're near the end
+    if (endPage - startPage + 1 < maxVisiblePages) {
+        startPage = Math.max(1, endPage - maxVisiblePages + 1);
+    }
+    
+    // Add first page and ellipsis if needed
+    if (startPage > 1) {
+        addPageNumber(container, 1);
+        if (startPage > 2) {
+            addEllipsis(container);
         }
-    }, 500);
+    }
+    
+    // Add page numbers
+    for (let i = startPage; i <= endPage; i++) {
+        addPageNumber(container, i);
+    }
+    
+    // Add ellipsis and last page if needed
+    if (endPage < totalPages) {
+        if (endPage < totalPages - 1) {
+            addEllipsis(container);
+        }
+        addPageNumber(container, totalPages);
+    }
+}
+
+function addPageNumber(container, pageNum) {
+    const pageBtn = document.createElement('button');
+    pageBtn.className = 'page-number';
+    if (pageNum === currentPage) {
+        pageBtn.classList.add('active');
+    }
+    pageBtn.textContent = pageNum;
+    pageBtn.addEventListener('click', () => goToPage(pageNum));
+    container.appendChild(pageBtn);
+}
+
+function addEllipsis(container) {
+    const ellipsis = document.createElement('span');
+    ellipsis.className = 'page-number ellipsis';
+    ellipsis.textContent = '...';
+    container.appendChild(ellipsis);
 }
 
 // Utility Functions
@@ -908,6 +1662,16 @@ function formatDate(dateStr) {
     });
 }
 
+function formatMonth(monthStr) {
+    if (!monthStr) return 'N/A';
+    const [year, month] = monthStr.split('-');
+    const date = new Date(year, month - 1);
+    return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short'
+    });
+}
+
 function formatPhone(phone) {
     if (!phone) return 'Unknown';
     if (phone.length > 8) {
@@ -917,25 +1681,6 @@ function formatPhone(phone) {
 }
 
 // UI Helper Functions
-function showRefreshIndicator() {
-    let indicator = document.querySelector('.refresh-indicator');
-    if (!indicator) {
-        indicator = document.createElement('div');
-        indicator.className = 'refresh-indicator';
-        indicator.innerHTML = '🔄 Refreshing data...';
-        document.body.appendChild(indicator);
-    }
-    indicator.classList.add('show');
-}
-
-function hideRefreshIndicator() {
-    const indicator = document.querySelector('.refresh-indicator');
-    if (indicator) {
-        setTimeout(() => {
-            indicator.classList.remove('show');
-        }, 500);
-    }
-}
 
 function showErrorMessage(message) {
     const errorDiv = document.createElement('div');
@@ -958,4 +1703,188 @@ if (typeof module !== 'undefined' && module.exports) {
         formatNumber,
         formatMetricValue
     };
+}
+
+// View transaction details
+function viewTransactionDetails(transactionId) {
+    let transaction;
+    
+    // Try to find by ID first
+    if (transactionId) {
+        transaction = allTransactions.find(t => t.id === transactionId || t.id === parseInt(transactionId));
+    }
+    
+    // If not found by ID, try to find by index
+    if (!transaction && !isNaN(transactionId)) {
+        const index = parseInt(transactionId);
+        if (index >= 0 && index < allTransactions.length) {
+            transaction = allTransactions[index];
+        }
+    }
+    
+    if (!transaction) {
+        console.error('Transaction not found:', transactionId);
+        return;
+    }
+    
+    // Create modal or detailed view
+    const modal = document.createElement('div');
+    modal.className = 'transaction-modal';
+    modal.innerHTML = `
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Transaction Details</h3>
+                <button class="close-btn" onclick="this.closest('.transaction-modal').remove()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="detail-grid">
+                    <div class="detail-item">
+                        <label>ID:</label>
+                        <span>${transaction.id || 'N/A'}</span>
+                    </div>
+                    <div class="detail-item">
+                        <label>Date:</label>
+                        <span>${formatDate(transaction.date)}</span>
+                    </div>
+                    <div class="detail-item">
+                        <label>Type:</label>
+                        <span class="type-badge type-${(transaction.type || 'unknown').toLowerCase()}">${transaction.type || 'Unknown'}</span>
+                    </div>
+                    <div class="detail-item">
+                        <label>Category:</label>
+                        <span class="category-badge category-${(transaction.category || 'unknown').toLowerCase()}">${transaction.category || 'Unknown'}</span>
+                    </div>
+                    <div class="detail-item">
+                        <label>Amount:</label>
+                        <span class="formatted-number">${formatCurrency(transaction.amount)}</span>
+                    </div>
+                    <div class="detail-item">
+                        <label>Phone:</label>
+                        <span>${transaction.phone || 'N/A'}</span>
+                    </div>
+                    <div class="detail-item">
+                        <label>Reference:</label>
+                        <span>${transaction.reference || 'N/A'}</span>
+                    </div>
+                    <div class="detail-item">
+                        <label>Status:</label>
+                        <span class="status-badge status-${(transaction.status || 'unknown').toLowerCase()}">${transaction.status || 'Unknown'}</span>
+                    </div>
+                    ${transaction.raw_data ? `
+                    <div class="detail-item full-width">
+                        <label>Original SMS Data:</label>
+                        <textarea readonly>${transaction.raw_data}</textarea>
+                    </div>
+                    ` : ''}
+                    ${transaction.xml_attributes ? `
+                    <div class="detail-item full-width">
+                        <label>XML Attributes:</label>
+                        <textarea readonly>${JSON.stringify(transaction.xml_attributes, null, 2)}</textarea>
+                    </div>
+                    ` : ''}
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Add modal styles
+    const style = document.createElement('style');
+    style.textContent = `
+        .transaction-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background: white;
+            border: 6px solid black;
+            border-radius: 0;
+            max-width: 800px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 12px 12px 0 rgba(0,0,0,1);
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.5rem;
+            border-bottom: 6px solid black;
+            background: var(--brutal-yellow);
+            font-family: 'Lexend Mega', sans-serif;
+        }
+        .modal-header h3 {
+            margin: 0;
+            font-size: 1.5rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: var(--brutal-black);
+        }
+        .modal-body {
+            padding: 1.5rem;
+        }
+        .detail-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+        .detail-item.full-width {
+            grid-column: 1 / -1;
+        }
+        .detail-item label {
+            font-weight: 700;
+            text-transform: uppercase;
+            color: var(--brutal-black);
+            font-family: 'Lexend Mega', sans-serif;
+            display: block;
+            margin-bottom: 0.5rem;
+        }
+        .detail-item span {
+            display: block;
+            padding: 0.5rem;
+            background: var(--brutal-gray);
+            border: 2px solid var(--brutal-black);
+            font-weight: 600;
+        }
+        .detail-item textarea {
+            width: 100%;
+            height: 120px;
+            border: 3px solid var(--brutal-black);
+            padding: 0.75rem;
+            font-family: monospace;
+            font-size: 0.8rem;
+            background: var(--brutal-white);
+            resize: vertical;
+        }
+        .close-btn {
+            background: var(--brutal-pink);
+            color: var(--brutal-white);
+            border: 3px solid var(--brutal-black);
+            font-size: 1.5rem;
+            font-weight: 700;
+            cursor: pointer;
+            padding: 0.5rem 0.75rem;
+            box-shadow: 4px 4px 0 rgba(0,0,0,1);
+            transition: all 0.2s ease;
+        }
+        .close-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 6px 6px 0 rgba(0,0,0,1);
+        }
+        .close-btn:active {
+            transform: translateY(0);
+            box-shadow: 2px 2px 0 rgba(0,0,0,1);
+        }
+    `;
+    
+    document.head.appendChild(style);
+    document.body.appendChild(modal);
 }

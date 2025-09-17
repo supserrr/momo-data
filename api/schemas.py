@@ -26,6 +26,7 @@ class TransactionCategory(str, Enum):
     TRANSFER = "TRANSFER"
     PAYMENT = "PAYMENT"
     QUERY = "QUERY"
+    AIRTIME = "AIRTIME"
     OTHER = "OTHER"
     UNKNOWN = "UNKNOWN"
 
@@ -36,6 +37,7 @@ class TransactionType(str, Enum):
     TRANSFER = "TRANSFER"
     PAYMENT = "PAYMENT"
     QUERY = "QUERY"
+    AIRTIME = "AIRTIME"
     OTHER = "OTHER"
     UNKNOWN = "UNKNOWN"
 
@@ -45,9 +47,9 @@ class TransactionBase(BaseModel):
     phone: str = Field(..., description="Phone number", min_length=10, max_length=15)
     date: Optional[str] = Field(None, description="Transaction date (ISO format)")
     reference: Optional[str] = Field(None, description="Transaction reference")
-    type: Optional[TransactionType] = Field(None, description="Transaction type")
-    status: Optional[TransactionStatus] = Field(None, description="Transaction status")
-    category: Optional[TransactionCategory] = Field(None, description="Transaction category")
+    type: Optional[str] = Field(None, description="Transaction type")
+    status: Optional[str] = Field(None, description="Transaction status")
+    category: Optional[str] = Field(None, description="Transaction category")
     category_confidence: Optional[float] = Field(None, description="Category confidence score", ge=0, le=1)
 
 class TransactionCreate(TransactionBase):
@@ -60,9 +62,9 @@ class TransactionUpdate(BaseModel):
     phone: Optional[str] = Field(None, description="Phone number", min_length=10, max_length=15)
     date: Optional[str] = Field(None, description="Transaction date (ISO format)")
     reference: Optional[str] = Field(None, description="Transaction reference")
-    type: Optional[TransactionType] = Field(None, description="Transaction type")
-    status: Optional[TransactionStatus] = Field(None, description="Transaction status")
-    category: Optional[TransactionCategory] = Field(None, description="Transaction category")
+    type: Optional[str] = Field(None, description="Transaction type")
+    status: Optional[str] = Field(None, description="Transaction status")
+    category: Optional[str] = Field(None, description="Transaction category")
     category_confidence: Optional[float] = Field(None, description="Category confidence score", ge=0, le=1)
 
 class Transaction(TransactionBase):
@@ -141,8 +143,8 @@ class TransactionFilters(BaseModel):
     """Transaction filters model."""
     limit: int = Field(100, description="Maximum number of results", ge=1, le=1000)
     offset: int = Field(0, description="Number of results to skip", ge=0)
-    category: Optional[TransactionCategory] = Field(None, description="Filter by category")
-    status: Optional[TransactionStatus] = Field(None, description="Filter by status")
+    category: Optional[str] = Field(None, description="Filter by category")
+    status: Optional[str] = Field(None, description="Filter by status")
     phone: Optional[str] = Field(None, description="Filter by phone number")
     start_date: Optional[str] = Field(None, description="Start date filter (ISO format)")
     end_date: Optional[str] = Field(None, description="End date filter (ISO format)")

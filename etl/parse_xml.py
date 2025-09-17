@@ -36,22 +36,14 @@ class XMLParser:
             root = tree.getroot()
             
             # Extract transactions based on XML structure
-            # This is a generic parser - adjust based on actual XML structure
+            # This parser is specifically designed for SMS backup XML files
             transactions = []
             
-            # Look for common transaction elements
-            for transaction_elem in root.findall('.//transaction'):
-                transaction = self._extract_transaction(transaction_elem)
+            # Look for SMS elements that contain mobile money transactions
+            for sms_elem in root.findall('.//sms'):
+                transaction = self._extract_sms_transaction(sms_elem)
                 if transaction:
                     transactions.append(transaction)
-            
-            # If no transactions found with 'transaction' tag, try other common tags
-            if not transactions:
-                for elem in root.findall('.//*'):
-                    if self._is_transaction_element(elem):
-                        transaction = self._extract_transaction(elem)
-                        if transaction:
-                            transactions.append(transaction)
             
             logger.info(f"Successfully parsed {len(transactions)} transactions")
             self.transactions = transactions
@@ -76,6 +68,170 @@ class XMLParser:
             any(indicator in text_content.lower() for indicator in transaction_indicators)
         )
     
+    def _extract_sms_transaction(self, sms_elem) -> Optional[Dict[str, Any]]:
+        """Extract transaction data from SMS element."""
+        try:
+            # Get SMS attributes
+            body = sms_elem.get('body', '')
+            date = sms_elem.get('date', '')
+            readable_date = sms_elem.get('readable_date', '')
+            address = sms_elem.get('address', '')
+            
+            # Only process SMS from M-Money (mobile money service)
+            if 'M-Money' not in address and 'mobile' not in body.lower():
+                return None
+            
+            # Parse the SMS body for transaction information
+            transaction = self._parse_sms_body(body)
+            
+            if not transaction:
+                return None
+            
+            # Add SMS metadata
+            transaction['raw_data'] = body
+            transaction['xml_tag'] = 'sms'
+            transaction['xml_attributes'] = dict(sms_elem.attrib)
+            transaction['original_data'] = body
+            
+            # Parse date from SMS attributes
+            if date:
+                try:
+                    # Convert Unix timestamp to ISO format
+                    timestamp = int(date) / 1000  # Convert from milliseconds
+                    parsed_date = datetime.fromtimestamp(timestamp)
+                    transaction['date'] = parsed_date.isoformat()
+                except (ValueError, OSError):
+                    transaction['date'] = readable_date
+            
+            # Validate transaction
+            if self._validate_transaction(transaction):
+                return transaction
+            else:
+                logger.warning(f"Invalid SMS transaction: {transaction}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Error extracting SMS transaction: {e}")
+            return None
+
+    def _parse_sms_body(self, body: str) -> Optional[Dict[str, Any]]:
+        """Parse SMS body to extract transaction information."""
+        if not body:
+            return None
+        
+        import re
+        
+        transaction = {}
+        
+        # Amount patterns (RWF currency) - try multiple patterns
+        amount_patterns = [
+            # Patterns for *165*S* format (transfers)
+            r'\*165\*S\*(\d{1,3}(?:,\d{3})*)\s*RWF',  # *165*S*4000 RWF
+            r'\*165\*S\*(\d+)\s*RWF',  # *165*S*4000 RWF (no commas)
+            
+            # Patterns for *113*R* format (deposits)
+            r'\*113\*R\*.*?deposit of\s+(\d{1,3}(?:,\d{3})*)\s*RWF',  # *113*R*A bank deposit of 20000 RWF
+            r'\*113\*R\*.*?deposit of\s+(\d+)\s*RWF',  # *113*R*A bank deposit of 20000 RWF (no commas)
+            
+            # Patterns for *162* format (payments)
+            r'\*162\*.*?payment of\s+(\d{1,3}(?:,\d{3})*)\s*RWF',  # *162*TxId:...*S*Your payment of 3000 RWF
+            r'\*162\*.*?payment of\s+(\d+)\s*RWF',  # *162*TxId:...*S*Your payment of 3000 RWF (no commas)
+            
+            # Patterns for *164* format (data bundles)
+            r'\*164\*.*?transaction of\s+(\d{1,3}(?:,\d{3})*)\s*RWF',  # *164*S*Y'ello,A transaction of 10000 RWF
+            r'\*164\*.*?transaction of\s+(\d+)\s*RWF',  # *164*S*Y'ello,A transaction of 10000 RWF (no commas)
+            
+            # General patterns - more comprehensive
+            r'received\s+(\d{1,3}(?:,\d{3})*)\s*RWF',  # received 2000 RWF
+            r'payment of\s+(\d{1,3}(?:,\d{3})*)\s*RWF',  # payment of 1,000 RWF
+            r'transferred\s+(\d{1,3}(?:,\d{3})*)\s*RWF',  # transferred 1000 RWF
+            r'deposit of\s+(\d{1,3}(?:,\d{3})*)\s*RWF',  # deposit of 40000 RWF
+            r'withdrawn\s+(\d{1,3}(?:,\d{3})*)\s*RWF',  # withdrawn 20000 RWF
+            r'You have received\s+(\d{1,3}(?:,\d{3})*)\s*RWF',  # You have received 2000 RWF
+            r'You have transferred\s+(\d{1,3}(?:,\d{3})*)\s*RWF',  # You have transferred 10000 RWF
+            r'Your payment of\s+(\d{1,3}(?:,\d{3})*)\s*RWF',  # Your payment of 8000 RWF
+            r'with\s+(\d{1,3}(?:,\d{3})*)\s*RWF',  # with 3000 RWF (for reversals)
+            r'amount\s+(\d{1,3}(?:,\d{3})*)\s*RWF',  # amount 5000 RWF
+            r'DEPOSIT\s+RWF\s+(\d{1,3}(?:,\d{3})*)',  # DEPOSIT RWF 25000
+            r'(\d{1,3}(?:,\d{3})*)\s*RWF',  # 1,000 RWF (general)
+            r'(\d+)\s*RWF',  # 1000 RWF (general, no commas)
+        ]
+        
+        for pattern in amount_patterns:
+            match = re.search(pattern, body)
+            if match:
+                try:
+                    amount = float(match.group(1).replace(',', ''))
+                    transaction['amount'] = amount
+                    break
+                except ValueError:
+                    continue
+        
+        # Phone number patterns
+        phone_patterns = [
+            r'(\+?250\d{9})',  # +250XXXXXXXXX
+            r'(\+?256\d{9})',  # +256XXXXXXXXX
+            r'(\d{9})',        # XXXXXXXXX
+        ]
+        
+        for pattern in phone_patterns:
+            match = re.search(pattern, body)
+            if match:
+                phone = match.group(1)
+                # Normalize phone number
+                if phone.startswith('250'):
+                    phone = '+' + phone
+                elif phone.startswith('256'):
+                    phone = '+' + phone
+                elif len(phone) == 9:
+                    phone = '+250' + phone
+                transaction['phone'] = phone
+                break
+        
+        # Transaction type detection
+        if 'received' in body.lower() and 'from' in body.lower():
+            transaction['type'] = 'DEPOSIT'
+            transaction['status'] = 'SUCCESS'
+        elif 'payment of' in body.lower() and 'to' in body.lower():
+            if 'airtime' in body.lower():
+                transaction['type'] = 'AIRTIME'
+            else:
+                transaction['type'] = 'PAYMENT'
+            transaction['status'] = 'SUCCESS'
+        elif 'transferred to' in body.lower():
+            transaction['type'] = 'TRANSFER'
+            transaction['status'] = 'SUCCESS'
+        elif 'bank deposit' in body.lower():
+            transaction['type'] = 'DEPOSIT'
+            transaction['status'] = 'SUCCESS'
+        elif 'withdrawal' in body.lower() or 'withdraw' in body.lower():
+            transaction['type'] = 'WITHDRAWAL'
+            transaction['status'] = 'SUCCESS'
+        else:
+            transaction['type'] = 'UNKNOWN'
+            transaction['status'] = 'SUCCESS'
+        
+        # Extract fee
+        fee_match = re.search(r'Fee was[:\s]*(\d+)\s*RWF', body)
+        if fee_match:
+            transaction['fee'] = float(fee_match.group(1))
+        
+        # Extract balance
+        balance_match = re.search(r'balance[:\s]*(\d{1,3}(?:,\d{3})*)\s*RWF', body, re.IGNORECASE)
+        if balance_match:
+            transaction['balance'] = float(balance_match.group(1).replace(',', ''))
+        
+        # Extract transaction ID
+        txid_match = re.search(r'TxId[:\s]*(\d+)', body)
+        if txid_match:
+            transaction['reference'] = txid_match.group(1)
+        
+        # Check for failed transactions
+        if any(word in body.lower() for word in ['failed', 'error', 'unsuccessful', 'declined']):
+            transaction['status'] = 'FAILED'
+        
+        return transaction
+
     def _extract_transaction(self, element) -> Optional[Dict[str, Any]]:
         """Extract transaction data from XML element."""
         try:

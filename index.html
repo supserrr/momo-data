@@ -146,6 +146,7 @@
         .skip-to-content:focus {
             top: 0;
         }
+        
     </style>
 </head>
 <body>
@@ -188,6 +189,11 @@
             <div class="nb-text-center" style="margin-top: 2rem;">
                 <div class="brutal-bounce" style="display: inline-block; background: var(--brutal-white); color: var(--brutal-black); padding: 1rem 2rem; border: 6px solid var(--brutal-black); box-shadow: 8px 8px 0 rgba(0,0,0,1); font-weight: 700; text-transform: uppercase; font-family: 'Lexend Mega', sans-serif;">
                     Live Data Processing
+                </div>
+                <div style="margin-top: 1rem;">
+                    <button id="refreshDataBtn" onclick="refreshDashboardData()" style="background: var(--brutal-pink); color: var(--brutal-white); border: 4px solid var(--brutal-black); padding: 0.75rem 1.5rem; font-weight: 700; text-transform: uppercase; font-family: 'Lexend Mega', sans-serif; cursor: pointer; box-shadow: 4px 4px 0 rgba(0,0,0,1); transition: all 0.1s ease;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='6px 6px 0 rgba(0,0,0,1)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='4px 4px 0 rgba(0,0,0,1)'" onmousedown="this.style.transform='translateY(2px)'; this.style.boxShadow='2px 2px 0 rgba(0,0,0,1)'" onmouseup="this.style.transform='translateY(-2px)'; this.style.boxShadow='6px 6px 0 rgba(0,0,0,1)'">
+                        Refresh Data
+                    </button>
                 </div>
             </div>
         </div>
@@ -260,7 +266,7 @@
             
             <!-- Transaction Volume Chart - Full Width -->
             <div class="chart-container volume-chart-container" style="background: var(--brutal-yellow); margin-bottom: 2rem;">
-                <h3 class="nb-text-center" style="font-weight: 700; color: var(--brutal-black); text-transform: uppercase; margin-bottom: 1.5rem;">Transaction Volume by Date</h3>
+                <h3 class="nb-text-center" style="font-weight: 700; color: var(--brutal-black); text-transform: uppercase; margin-bottom: 1.5rem;">Transaction Volume by Month</h3>
                 <canvas id="volumeChart"></canvas>
             </div>
             
@@ -268,6 +274,12 @@
             <div class="chart-container category-chart-container" style="background: var(--brutal-mint); margin-bottom: 2rem;">
                 <h3 class="nb-text-center" style="font-weight: 700; color: var(--brutal-black); text-transform: uppercase; margin-bottom: 1.5rem;">Transaction Categories</h3>
                 <canvas id="categoryChart"></canvas>
+            </div>
+            
+            <!-- Amount Distribution Chart -->
+            <div class="chart-container amount-chart-container" style="background: var(--brutal-purple); margin-bottom: 2rem;">
+                <h3 class="nb-text-center" style="font-weight: 700; color: var(--brutal-black); text-transform: uppercase; margin-bottom: 1.5rem;">Transaction Amount Distribution</h3>
+                <canvas id="amountChart"></canvas>
             </div>
             
             <!-- Hourly Distribution Chart -->
@@ -288,15 +300,17 @@
                         <tr>
                             <th>Date</th>
                             <th>Type</th>
+                            <th>Category</th>
                             <th>Amount</th>
-                            <th class="nb-hidden nb-block-md">Sender</th>
-                            <th class="nb-hidden nb-block-md">Receiver</th>
+                            <th class="nb-hidden nb-block-md">Phone</th>
+                            <th class="nb-hidden nb-block-md">Reference</th>
                             <th>Status</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody id="transactionsBody">
                         <tr>
-                            <td colspan="6" class="nb-text-center">
+                            <td colspan="8" class="nb-text-center">
                                 <div class="skeleton" style="display: inline-block; width: 200px; height: 40px; margin: 1rem auto;"></div>
                                 <p style="font-weight: 600; color: var(--brutal-black); text-transform: uppercase; margin-top: 1rem;">Loading transactions...</p>
                             </td>
@@ -304,10 +318,36 @@
                     </tbody>
                 </table>
                 <div class="nb-table-footer" id="tableFooter">
-                    <div id="tableInfo">Loading...</div>
-                    <button id="loadMoreBtn" class="brutal-btn brutal-btn-blue" style="display: none; margin-top: 1rem;">
-                        Load More Transactions
-                    </button>
+                    <div class="pagination-container">
+                        <div class="pagination-info">
+                            <span id="tableInfo">Loading...</span>
+                            <div class="page-size-selector">
+                                <label for="pageSize">Show:</label>
+                                <select id="pageSize" class="brutal-select">
+                                    <option value="10" selected>10</option>
+                                    <option value="25">25</option>
+                                    <option value="50">50</option>
+                                    <option value="100">100</option>
+                                </select>
+                                <span>per page</span>
+                            </div>
+                        </div>
+                        <div class="pagination-controls" id="paginationControls" style="display: none;">
+                            <button id="firstPageBtn" class="pagination-btn" disabled>
+                                <span>««</span>
+                            </button>
+                            <button id="prevPageBtn" class="pagination-btn" disabled>
+                                <span>«</span>
+                            </button>
+                            <div class="page-numbers" id="pageNumbers"></div>
+                            <button id="nextPageBtn" class="pagination-btn">
+                                <span>»</span>
+                            </button>
+                            <button id="lastPageBtn" class="pagination-btn">
+                                <span>»»</span>
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

@@ -15,8 +15,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from api.db import DatabaseManager
-from api.schemas import (
+from .db import DatabaseManager
+from .schemas import (
     Transaction, TransactionCreate, TransactionUpdate, TransactionFilters,
     DashboardData, AnalyticsData, ETLProcessLog, DatabaseStats,
     SearchQuery, ETLRunRequest, ETLRunResponse, APIResponse, ErrorResponse
@@ -151,6 +151,16 @@ async def get_categories(db: DatabaseManager = Depends(get_db_manager)):
         return categories
     except Exception as e:
         logger.error(f"Error getting categories: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/monthly-transactions")
+async def get_monthly_transactions(db: DatabaseManager = Depends(get_db_manager)):
+    """Get all transactions grouped by month for volume chart."""
+    try:
+        monthly_data = db.get_monthly_transaction_data()
+        return monthly_data
+    except Exception as e:
+        logger.error(f"Error getting monthly transactions: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/search", response_model=List[Transaction])

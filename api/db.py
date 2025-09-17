@@ -70,7 +70,19 @@ class DatabaseManager:
             cursor.execute(query, params)
             rows = cursor.fetchall()
             
-            return [dict(row) for row in rows]
+            # Convert rows to dictionaries and parse JSON fields
+            transactions = []
+            for row in rows:
+                transaction = dict(row)
+                # Parse xml_attributes if it's a JSON string
+                if transaction.get('xml_attributes') and isinstance(transaction['xml_attributes'], str):
+                    try:
+                        import json
+                        transaction['xml_attributes'] = json.loads(transaction['xml_attributes'])
+                    except (json.JSONDecodeError, TypeError):
+                        transaction['xml_attributes'] = {}
+                transactions.append(transaction)
+            return transactions
     
     def get_transaction_by_id(self, transaction_id: int) -> Optional[Dict[str, Any]]:
         """Get a specific transaction by ID."""
@@ -79,7 +91,17 @@ class DatabaseManager:
             cursor.execute("SELECT * FROM transactions WHERE id = ?", (transaction_id,))
             row = cursor.fetchone()
             
-            return dict(row) if row else None
+            if row:
+                transaction = dict(row)
+                # Parse xml_attributes if it's a JSON string
+                if transaction.get('xml_attributes') and isinstance(transaction['xml_attributes'], str):
+                    try:
+                        import json
+                        transaction['xml_attributes'] = json.loads(transaction['xml_attributes'])
+                    except (json.JSONDecodeError, TypeError):
+                        transaction['xml_attributes'] = {}
+                return transaction
+            return None
     
     def get_dashboard_data(self) -> Dict[str, Any]:
         """Get dashboard summary data."""
@@ -106,13 +128,29 @@ class DatabaseManager:
             
             # Get category distribution
             cursor.execute("""
-                SELECT category, COUNT(*) as count, SUM(amount) as total_amount
+                SELECT 
+                    category, 
+                    COUNT(*) as count, 
+                    SUM(amount) as total_amount,
+                    AVG(amount) as avg_amount,
+                    MIN(amount) as min_amount,
+                    MAX(amount) as max_amount,
+                    datetime('now') as last_updated
                 FROM transactions
                 WHERE category IS NOT NULL
                 GROUP BY category
                 ORDER BY count DESC
             """)
-            categories = [dict(row) for row in cursor.fetchall()]
+            categories = []
+            for row in cursor.fetchall():
+                category = dict(row)
+                # Ensure all required fields are present with proper types
+                category['avg_amount'] = float(category['avg_amount']) if category['avg_amount'] else 0.0
+                category['min_amount'] = float(category['min_amount']) if category['min_amount'] else 0.0
+                category['max_amount'] = float(category['max_amount']) if category['max_amount'] else 0.0
+                category['total_amount'] = float(category['total_amount']) if category['total_amount'] else 0.0
+                category['count'] = int(category['count']) if category['count'] else 0
+                categories.append(category)
             
             # Get amount distribution
             cursor.execute("""
@@ -136,20 +174,88 @@ class DatabaseManager:
             """)
             amount_distribution = [dict(row) for row in cursor.fetchall()]
             
-            # Get recent transactions
+            # Get recent transactions (for table display)
             cursor.execute("""
-                SELECT date, amount, type, status, phone, category
+                SELECT id, date, amount, type, status, phone, category, reference, 
+                       original_data, raw_data, xml_tag, xml_attributes, 
+                       cleaned_at, categorized_at, loaded_at
                 FROM transactions
                 ORDER BY date DESC
                 LIMIT 10
             """)
-            recent_transactions = [dict(row) for row in cursor.fetchall()]
+            recent_transactions = []
+            for row in cursor.fetchall():
+                transaction = dict(row)
+                # Ensure id is present and is an integer
+                if 'id' not in transaction or transaction['id'] is None:
+                    transaction['id'] = 0
+                else:
+                    transaction['id'] = int(transaction['id'])
+                
+                # Parse xml_attributes from JSON string to dict
+                if transaction.get('xml_attributes'):
+                    try:
+                        import json
+                        transaction['xml_attributes'] = json.loads(transaction['xml_attributes'])
+                    except (json.JSONDecodeError, TypeError):
+                        transaction['xml_attributes'] = {}
+                else:
+                    transaction['xml_attributes'] = {}
+                recent_transactions.append(transaction)
+            
             
             return {
                 'summary': summary,
                 'categories': categories,
                 'amount_distribution': amount_distribution,
                 'recent_transactions': recent_transactions
+            }
+    
+    def get_monthly_transaction_data(self) -> Dict[str, Any]:
+        """Get all transactions grouped by month for volume chart."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Get monthly aggregated data
+            cursor.execute("""
+                SELECT 
+                    strftime('%Y-%m', date) as month,
+                    COUNT(*) as count,
+                    SUM(amount) as volume,
+                    AVG(amount) as avg_amount
+                FROM transactions
+                WHERE amount > 0
+                GROUP BY strftime('%Y-%m', date)
+                ORDER BY month
+            """)
+            monthly_stats = []
+            for row in cursor.fetchall():
+                month_data = dict(row)
+                month_data['volume'] = float(month_data['volume']) if month_data['volume'] else 0.0
+                month_data['avg_amount'] = float(month_data['avg_amount']) if month_data['avg_amount'] else 0.0
+                monthly_stats.append(month_data)
+            
+            # Get hourly pattern from all transactions
+            cursor.execute("""
+                SELECT 
+                    strftime('%H', date) as hour,
+                    COUNT(*) as count,
+                    SUM(amount) as volume
+                FROM transactions
+                WHERE amount > 0
+                GROUP BY strftime('%H', date)
+                ORDER BY hour
+            """)
+            hourly_pattern = []
+            for row in cursor.fetchall():
+                hour_data = dict(row)
+                hour_data['hour'] = int(hour_data['hour'])
+                hour_data['volume'] = float(hour_data['volume']) if hour_data['volume'] else 0.0
+                hourly_pattern.append(hour_data)
+            
+            return {
+                'monthly_stats': monthly_stats,
+                'hourly_pattern': hourly_pattern
             }
     
     def get_analytics(self, start_date: Optional[str] = None, end_date: Optional[str] = None) -> Dict[str, Any]:

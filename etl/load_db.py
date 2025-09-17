@@ -189,9 +189,25 @@ class DatabaseLoader:
             'loaded_at': datetime.now().isoformat()
         }
         
-        # Insert with conflict resolution (ignore duplicates)
+        # Check for existing transaction before inserting
+        # This handles the case where reference might be NULL
         cursor.execute("""
-            INSERT OR IGNORE INTO transactions (
+            SELECT id FROM transactions 
+            WHERE phone = :phone 
+            AND amount = :amount 
+            AND date = :date 
+            AND (reference = :reference OR (reference IS NULL AND :reference IS NULL))
+        """, data)
+        
+        existing = cursor.fetchone()
+        if existing:
+            # Transaction already exists, skip insertion
+            logger.debug(f"Duplicate transaction skipped: {data['phone']}, {data['amount']}, {data['date']}")
+            return
+        
+        # Insert new transaction
+        cursor.execute("""
+            INSERT INTO transactions (
                 amount, phone, date, reference, type, status, category,
                 category_confidence, original_data, raw_data, xml_tag,
                 xml_attributes, cleaned_at, categorized_at, loaded_at
