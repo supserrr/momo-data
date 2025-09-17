@@ -1,5 +1,6 @@
 """
-XML parsing module for MoMo transaction data.
+XML Parser for MoMo SMS Data
+Team 11 - Enterprise Web Development
 """
 
 import xml.etree.ElementTree as ET
@@ -80,7 +81,7 @@ class XMLParser:
         try:
             transaction = {}
             
-            # Extract common fields
+            # Store raw data for debugging and analysis
             transaction['raw_data'] = self._get_element_text(element)
             transaction['xml_tag'] = element.tag
             transaction['xml_attributes'] = dict(element.attrib)

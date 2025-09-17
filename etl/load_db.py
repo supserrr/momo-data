@@ -1,5 +1,6 @@
 """
-Database loading module for MoMo transaction data.
+Database Operations for MoMo Data
+Team 11 - Enterprise Web Development
 """
 
 import sqlite3
@@ -57,7 +58,7 @@ class DatabaseLoader:
         try:
             cursor = self.connection.cursor()
             
-            # Transactions table
+            # Main transactions table with all processed data
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS transactions (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,

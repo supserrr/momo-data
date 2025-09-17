@@ -1,5 +1,6 @@
 """
-Transaction categorization module for MoMo data.
+Transaction Categorization System
+Team 11 - Enterprise Web Development
 """
 
 import re
@@ -79,6 +80,7 @@ class TransactionCategorizer:
     def _determine_category(self, transaction: Dict[str, Any]) -> tuple:
         """
         Determine transaction category and confidence.
+        Uses keyword matching and heuristics to classify transactions.
         
         Args:
             transaction: Transaction dictionary
@@ -97,7 +99,7 @@ class TransactionCategorizer:
         
         combined_text = ' '.join(str(field) for field in text_fields if field).lower()
         
-        # Rule-based categorization
+        # Rule-based categorization using keyword matching
         category_scores = {}
         
         for category, keywords in TRANSACTION_CATEGORIES.items():

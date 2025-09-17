@@ -122,7 +122,7 @@ print_status "Creating necessary directories..."
 mkdir -p "$PROJECT_ROOT/data/raw"
 mkdir -p "$PROJECT_ROOT/data/processed"
 mkdir -p "$PROJECT_ROOT/logs"
-mkdir -p "$PROJECT_ROOT/logs/dead_letter"
+mkdir -p "$PROJECT_ROOT/data/logs/dead_letter"
 
 # Build Python command
 PYTHON_CMD="python3 $ETL_SCRIPT --xml \"$XML_FILE\" --log-level $LOG_LEVEL"
@@ -167,13 +167,13 @@ if eval "$PYTHON_CMD"; then
     fi
     
     # Show log file location
-    if [[ -f "$PROJECT_ROOT/logs/etl.log" ]]; then
-        print_status "ETL log file: $PROJECT_ROOT/logs/etl.log"
+    if [[ -f "$PROJECT_ROOT/data/logs/etl.log" ]]; then
+        print_status "ETL log file: $PROJECT_ROOT/data/logs/etl.log"
     fi
     
 else
     print_error "ETL pipeline failed!"
-    print_status "Check the log file for details: $PROJECT_ROOT/logs/etl.log"
+    print_status "Check the log file for details: $PROJECT_ROOT/data/logs/etl.log"
     exit 1
 fi
 

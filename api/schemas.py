@@ -1,5 +1,6 @@
 """
-Pydantic schemas for API request/response models.
+API Data Models
+Team 11 - Enterprise Web Development
 """
 
 from pydantic import BaseModel, Field, validator

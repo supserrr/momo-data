@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Main ETL runner for MoMo data processing pipeline.
+ETL Pipeline for MoMo SMS Data Processing
+Team 11 - Enterprise Web Development
 """
 
 import argparse
@@ -40,6 +41,7 @@ def setup_logging(log_file: Path = ETL_LOG_FILE, level: str = LOG_LEVEL):
 def run_etl_pipeline(xml_file: Path, export_json: bool = True) -> dict:
     """
     Run the complete ETL pipeline.
+    This function orchestrates the entire data processing workflow.
     
     Args:
         xml_file: Path to XML input file

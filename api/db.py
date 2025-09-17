@@ -1,5 +1,6 @@
 """
-Database connection and query helpers for the API.
+Database Manager for API
+Team 11 - Enterprise Web Development
 """
 
 import sqlite3

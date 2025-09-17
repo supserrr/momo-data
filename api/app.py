@@ -1,5 +1,6 @@
 """
-FastAPI application for MoMo data processing system.
+FastAPI Application for MoMo Data Processing
+Team 11 - Enterprise Web Development
 """
 
 import logging

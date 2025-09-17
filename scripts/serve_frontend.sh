@@ -215,12 +215,12 @@ if [[ "$START_API" == true ]]; then
     
     if [[ "$BACKGROUND" == true ]]; then
         print_status "Starting server in background..."
-        nohup python3 -m uvicorn api.app:app --host $HOST --port $PORT > logs/api_server.log 2>&1 &
+        nohup python3 -m uvicorn api.app:app --host $HOST --port $PORT > data/logs/api_server.log 2>&1 &
         SERVER_PID=$!
-        echo $SERVER_PID > logs/api_server.pid
+        echo $SERVER_PID > data/logs/api_server.pid
         print_success "API server started in background (PID: $SERVER_PID)"
-        print_status "Log file: logs/api_server.log"
-        print_status "PID file: logs/api_server.pid"
+        print_status "Log file: data/logs/api_server.log"
+        print_status "PID file: data/logs/api_server.pid"
     else
         print_status "Starting API server (Press Ctrl+C to stop)..."
         python3 -m uvicorn api.app:app --host $HOST --port $PORT
@@ -233,12 +233,12 @@ else
     
     if [[ "$BACKGROUND" == true ]]; then
         print_status "Starting server in background..."
-        nohup python3 -m http.server $PORT --bind $HOST > logs/frontend_server.log 2>&1 &
+        nohup python3 -m http.server $PORT --bind $HOST > data/logs/frontend_server.log 2>&1 &
         SERVER_PID=$!
-        echo $SERVER_PID > logs/frontend_server.pid
+        echo $SERVER_PID > data/logs/frontend_server.pid
         print_success "Frontend server started in background (PID: $SERVER_PID)"
-        print_status "Log file: logs/frontend_server.log"
-        print_status "PID file: logs/frontend_server.pid"
+        print_status "Log file: data/logs/frontend_server.log"
+        print_status "PID file: data/logs/frontend_server.pid"
     else
         print_status "Starting frontend server (Press Ctrl+C to stop)..."
         python3 -m http.server $PORT --bind $HOST

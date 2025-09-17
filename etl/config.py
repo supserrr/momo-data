@@ -1,5 +1,6 @@
 """
-Configuration settings for the MoMo ETL pipeline.
+Configuration Settings
+Team 11 - Enterprise Web Development
 """
 
 import os
@@ -10,7 +11,7 @@ BASE_DIR = Path(__file__).parent.parent
 DATA_DIR = BASE_DIR / "data"
 RAW_DIR = DATA_DIR / "raw"
 PROCESSED_DIR = DATA_DIR / "processed"
-LOGS_DIR = BASE_DIR / "logs"
+LOGS_DIR = DATA_DIR / "logs"
 DEAD_LETTER_DIR = LOGS_DIR / "dead_letter"
 
 # File paths

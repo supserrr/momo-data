@@ -1,0 +1,95 @@
+2025-09-08 11:36:39,731 - __main__ - INFO - ETL process started - Log level: INFO
+2025-09-08 11:36:39,731 - __main__ - INFO - ==================================================
+2025-09-08 11:36:39,731 - __main__ - INFO - Starting MoMo ETL Pipeline
+2025-09-08 11:36:39,731 - __main__ - INFO - ==================================================
+2025-09-08 11:36:39,731 - __main__ - INFO - Step 1: Parsing XML data...
+2025-09-08 11:36:39,731 - etl.parse_xml - INFO - Parsing XML file: data/raw/sample_momo.xml
+2025-09-08 11:36:39,731 - etl.parse_xml - WARNING - Invalid transaction data: {'raw_data': '', 'xml_tag': 'transaction', 'xml_attributes': {}, 'amount': 0.0, 'phone': '+256700123460', 'date': '2025-01-15T14:00:00', 'reference': 'TXN005', 'type': 'QUERY', 'status': 'SUCCESS', 'description': 'Balance inquiry'}
+2025-09-08 11:36:39,732 - etl.parse_xml - INFO - Successfully parsed 9 transactions
+2025-09-08 11:36:39,732 - __main__ - INFO - Parsed 9 transactions
+2025-09-08 11:36:39,732 - __main__ - INFO - Step 2: Cleaning and normalizing data...
+2025-09-08 11:36:39,732 - etl.clean_normalize - INFO - Cleaned 9 transactions, 0 errors
+2025-09-08 11:36:39,732 - __main__ - INFO - Cleaned 9 transactions
+2025-09-08 11:36:39,732 - __main__ - INFO - Step 3: Categorizing transactions...
+2025-09-08 11:36:39,733 - etl.categorize - INFO - Categorized 9 transactions, 0 uncategorized
+2025-09-08 11:36:39,733 - __main__ - INFO - Categorized 9 transactions
+2025-09-08 11:36:39,733 - __main__ - INFO - Step 4: Loading to database...
+2025-09-08 11:36:39,733 - etl.load_db - INFO - Connected to database: /Users/password/momo-data/data/db.sqlite3
+2025-09-08 11:36:39,736 - etl.load_db - INFO - Database tables created successfully
+2025-09-08 11:36:39,737 - etl.load_db - INFO - Loaded 9 transactions, 0 errors
+2025-09-08 11:36:39,737 - __main__ - INFO - Loaded 9 transactions to database
+2025-09-08 11:36:39,737 - __main__ - INFO - Step 5: Exporting dashboard data...
+2025-09-08 11:36:39,738 - etl.load_db - INFO - Dashboard data exported to /Users/password/momo-data/data/processed/dashboard.json
+2025-09-08 11:36:39,738 - __main__ - INFO - Dashboard data exported successfully
+2025-09-08 11:36:39,738 - etl.load_db - INFO - Database connection closed
+2025-09-08 11:36:39,738 - __main__ - INFO - ==================================================
+2025-09-08 11:36:39,738 - __main__ - INFO - ETL Pipeline Completed Successfully
+2025-09-08 11:36:39,738 - __main__ - INFO - Duration: 0.01 seconds
+2025-09-08 11:36:39,738 - __main__ - INFO - Total processed: 9
+2025-09-08 11:36:39,738 - __main__ - INFO - Final loaded: 9
+2025-09-08 11:36:39,738 - __main__ - INFO - ==================================================
+2025-09-08 11:36:39,738 - __main__ - INFO - ETL pipeline completed successfully
+2025-09-08 11:51:53,160 - __main__ - INFO - ETL process started - Log level: INFO
+2025-09-08 11:51:53,160 - __main__ - INFO - Auto-detected XML file: /Users/password/momo-data/data/raw/sample_momo.xml
+2025-09-08 11:51:53,160 - __main__ - INFO - ==================================================
+2025-09-08 11:51:53,160 - __main__ - INFO - Starting MoMo ETL Pipeline
+2025-09-08 11:51:53,160 - __main__ - INFO - ==================================================
+2025-09-08 11:51:53,160 - __main__ - INFO - Step 1: Parsing XML data...
+2025-09-08 11:51:53,160 - etl.parse_xml - INFO - Parsing XML file: /Users/password/momo-data/data/raw/sample_momo.xml
+2025-09-08 11:51:53,161 - etl.parse_xml - WARNING - Invalid transaction data: {'raw_data': '', 'xml_tag': 'transaction', 'xml_attributes': {}, 'amount': 0.0, 'phone': '+256700123460', 'date': '2025-01-15T14:00:00', 'reference': 'TXN005', 'type': 'QUERY', 'status': 'SUCCESS', 'description': 'Balance inquiry'}
+2025-09-08 11:51:53,162 - etl.parse_xml - INFO - Successfully parsed 9 transactions
+2025-09-08 11:51:53,162 - __main__ - INFO - Parsed 9 transactions
+2025-09-08 11:51:53,162 - __main__ - INFO - Step 2: Cleaning and normalizing data...
+2025-09-08 11:51:53,162 - etl.clean_normalize - INFO - Cleaned 9 transactions, 0 errors
+2025-09-08 11:51:53,162 - __main__ - INFO - Cleaned 9 transactions
+2025-09-08 11:51:53,162 - __main__ - INFO - Step 3: Categorizing transactions...
+2025-09-08 11:51:53,163 - etl.categorize - INFO - Categorized 9 transactions, 0 uncategorized
+2025-09-08 11:51:53,163 - __main__ - INFO - Categorized 9 transactions
+2025-09-08 11:51:53,163 - __main__ - INFO - Step 4: Loading to database...
+2025-09-08 11:51:53,164 - etl.load_db - INFO - Connected to database: /Users/password/momo-data/data/db.sqlite3
+2025-09-08 11:51:53,165 - etl.load_db - INFO - Database tables created successfully
+2025-09-08 11:51:53,166 - etl.load_db - INFO - Loaded 9 transactions, 0 errors
+2025-09-08 11:51:53,166 - __main__ - INFO - Loaded 9 transactions to database
+2025-09-08 11:51:53,167 - __main__ - INFO - Step 5: Exporting dashboard data...
+2025-09-08 11:51:53,167 - etl.load_db - INFO - Dashboard data exported to /Users/password/momo-data/data/processed/dashboard.json
+2025-09-08 11:51:53,167 - __main__ - INFO - Dashboard data exported successfully
+2025-09-08 11:51:53,167 - etl.load_db - INFO - Database connection closed
+2025-09-08 11:51:53,167 - __main__ - INFO - ==================================================
+2025-09-08 11:51:53,167 - __main__ - INFO - ETL Pipeline Completed Successfully
+2025-09-08 11:51:53,167 - __main__ - INFO - Duration: 0.01 seconds
+2025-09-08 11:51:53,167 - __main__ - INFO - Total processed: 9
+2025-09-08 11:51:53,167 - __main__ - INFO - Final loaded: 9
+2025-09-08 11:51:53,167 - __main__ - INFO - ==================================================
+2025-09-08 11:51:53,167 - __main__ - INFO - ETL pipeline completed successfully
+2025-09-08 11:52:36,788 - __main__ - INFO - ETL process started - Log level: INFO
+2025-09-08 11:52:36,789 - __main__ - INFO - Auto-detected XML file: /Users/password/momo-data/data/raw/sample_momo.xml
+2025-09-08 11:52:36,789 - __main__ - INFO - ==================================================
+2025-09-08 11:52:36,789 - __main__ - INFO - Starting MoMo ETL Pipeline
+2025-09-08 11:52:36,789 - __main__ - INFO - ==================================================
+2025-09-08 11:52:36,789 - __main__ - INFO - Step 1: Parsing XML data...
+2025-09-08 11:52:36,789 - etl.parse_xml - INFO - Parsing XML file: /Users/password/momo-data/data/raw/sample_momo.xml
+2025-09-08 11:52:36,790 - etl.parse_xml - WARNING - Invalid transaction data: {'raw_data': '', 'xml_tag': 'transaction', 'xml_attributes': {}, 'amount': 0.0, 'phone': '+256700123460', 'date': '2025-01-15T14:00:00', 'reference': 'TXN005', 'type': 'QUERY', 'status': 'SUCCESS', 'description': 'Balance inquiry'}
+2025-09-08 11:52:36,790 - etl.parse_xml - INFO - Successfully parsed 9 transactions
+2025-09-08 11:52:36,790 - __main__ - INFO - Parsed 9 transactions
+2025-09-08 11:52:36,790 - __main__ - INFO - Step 2: Cleaning and normalizing data...
+2025-09-08 11:52:36,791 - etl.clean_normalize - INFO - Cleaned 9 transactions, 0 errors
+2025-09-08 11:52:36,791 - __main__ - INFO - Cleaned 9 transactions
+2025-09-08 11:52:36,791 - __main__ - INFO - Step 3: Categorizing transactions...
+2025-09-08 11:52:36,791 - etl.categorize - INFO - Categorized 9 transactions, 0 uncategorized
+2025-09-08 11:52:36,791 - __main__ - INFO - Categorized 9 transactions
+2025-09-08 11:52:36,791 - __main__ - INFO - Step 4: Loading to database...
+2025-09-08 11:52:36,792 - etl.load_db - INFO - Connected to database: /Users/password/momo-data/data/db.sqlite3
+2025-09-08 11:52:36,793 - etl.load_db - INFO - Database tables created successfully
+2025-09-08 11:52:36,795 - etl.load_db - INFO - Loaded 9 transactions, 0 errors
+2025-09-08 11:52:36,795 - __main__ - INFO - Loaded 9 transactions to database
+2025-09-08 11:52:36,795 - __main__ - INFO - Step 5: Exporting dashboard data...
+2025-09-08 11:52:36,796 - etl.load_db - INFO - Dashboard data exported to /Users/password/momo-data/data/processed/dashboard.json
+2025-09-08 11:52:36,796 - __main__ - INFO - Dashboard data exported successfully
+2025-09-08 11:52:36,796 - etl.load_db - INFO - Database connection closed
+2025-09-08 11:52:36,796 - __main__ - INFO - ==================================================
+2025-09-08 11:52:36,796 - __main__ - INFO - ETL Pipeline Completed Successfully
+2025-09-08 11:52:36,796 - __main__ - INFO - Duration: 0.01 seconds
+2025-09-08 11:52:36,796 - __main__ - INFO - Total processed: 9
+2025-09-08 11:52:36,796 - __main__ - INFO - Final loaded: 9
+2025-09-08 11:52:36,796 - __main__ - INFO - ==================================================
+2025-09-08 11:52:36,796 - __main__ - INFO - ETL pipeline completed successfully
