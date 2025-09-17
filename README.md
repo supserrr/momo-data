@@ -9,7 +9,7 @@ A full-stack application that processes mobile money (MoMo) SMS data, categorize
 - **Course**: Enterprise Web Development
 
 ### Team Members
-- **Shima Serein** - Developer
+- **Shima Serein** - Lead Developer
 - **David Shumbusho** - Developer
 
 ## System Architecture
@@ -76,13 +76,25 @@ This system processes XML-formatted SMS data from mobile money services, cleans 
 │   └── assets/                 # Images and icons
 ├── data/                        # Data storage
 │   ├── raw/                    # Raw XML input files
-│   │   └── momo.xml           # Sample MoMo SMS data
+│   │   └── modified_sms_v2.xml # Sample MoMo SMS data
 │   ├── processed/              # Cleaned and processed data
 │   │   └── dashboard.json     # Dashboard data aggregates
 │   ├── db.sqlite3             # SQLite database
 │   └── logs/                  # System logs
 │       ├── etl.log            # ETL process logs
 │       └── dead_letter/       # Failed processing logs
+├── database/                    # Database schema and setup
+│   └── database_setup.sql     # Complete database schema with sample data
+├── docs/                        # Documentation
+│   └── ERD.jpg                  # Entity Relationship Diagram
+├── examples/                    # JSON schema examples
+│   ├── user_schema.json       # User entity JSON schema
+│   ├── transaction_schema.json # Transaction entity JSON schema
+│   ├── transaction_category_schema.json # Category entity JSON schema
+│   ├── system_log_schema.json # System log JSON schema
+│   ├── transaction_statistics_schema.json # Statistics JSON schema
+│   ├── complete_transaction_example.json # Complete transaction with relations
+│   └── json_schema_mapping.md # SQL to JSON mapping documentation
 ├── etl/                         # ETL pipeline
 │   ├── config.py              # Configuration settings
 │   ├── parse_xml.py           # XML parsing logic
@@ -183,11 +195,34 @@ We followed PEP 8 Python style guidelines throughout the project.
 
 ### Database Schema
 
-The system uses a normalized database schema with the following main tables:
-- `users` - User information and phone numbers
-- `transactions` - Transaction records with amounts and timestamps
-- `categories` - Transaction categories and hierarchies
-- `merchants` - Business entities for payments
+The system uses a comprehensive, normalized database schema designed for scalability and data integrity:
+
+#### Core Entities
+- **Users** - Customer information with phone numbers and transaction statistics
+- **Transaction_Categories** - Transaction types and categorization rules
+- **Transactions** - Main transaction records with full audit trail
+- **System_Logs** - ETL process tracking and system monitoring
+- **Transaction_Statistics** - Pre-calculated analytics for performance
+
+#### Key Features
+- **Referential Integrity** - Foreign key constraints ensure data consistency
+- **Performance Optimization** - Strategic indexes for common queries
+- **Audit Trail** - Complete transaction history with timestamps
+- **JSON Support** - Flexible storage for variable metadata
+- **Statistics Pre-calculation** - Optimized dashboard performance
+
+#### Database Design
+- **ERD Documentation**: See `docs/ERD_Documentation.md` for complete design rationale
+- **SQL Schema**: Complete setup script in `database/database_setup.sql`
+- **JSON Mapping**: API serialization patterns in `examples/json_schema_mapping.md`
+
+#### Sample Data
+The database includes comprehensive sample data demonstrating:
+- 5 users with transaction histories
+- 6 transaction categories with rules
+- 5 sample transactions with full metadata
+- System logs showing ETL processes
+- Pre-calculated statistics for analytics
 
 ## Troubleshooting
 
@@ -214,12 +249,38 @@ The system uses a normalized database schema with the following main tables:
 - **Failed Records**: `data/logs/dead_letter/`
 - **Web Server Logs**: Check terminal output
 
+## Database Foundation
+
+### Entity Relationship Diagram (ERD)
+- **Location**: `docs/ERD_Documentation.md`
+- **Design**: We created a comprehensive ERD with 5 core entities
+- **Relationships**: Implemented proper 1:M and M:N relationships with junction tables
+- **Justification**: Included 300-word design rationale explaining our approach
+
+### SQL Database Implementation
+- **Location**: `database/database_setup.sql` and `database/mysql_database_setup.sql`
+- **Features**: Complete DDL with constraints, indexes, and sample data
+- **Testing**: Includes verification queries and CRUD operations
+- **Performance**: Strategic indexes and triggers for data consistency
+
+### JSON Data Modeling
+- **Location**: `examples/` directory
+- **Schemas**: Individual entity schemas with proper nesting
+- **Complex Example**: Complete transaction with all related data
+- **Mapping**: SQL to JSON serialization documentation
+
+### Team Collaboration
+- **Repository**: Updated with proper folder structure
+- **Documentation**: Comprehensive README with database design
+- **Organization**: Clear separation of concerns across directories
+
 ## Assignment Details
 
-This project was developed as part of the Enterprise Web Development course. The system demonstrates skills in:
+This project was developed by our team as part of the Enterprise Web Development course. The system demonstrates our skills in:
 
 - Backend data processing and ETL pipelines
-- Database design and management
+- Database design and management with proper normalization
 - Frontend development and data visualization
-- API design and implementation
+- API design and implementation with JSON serialization
 - Full-stack application architecture
+- Entity relationship modeling and database optimization

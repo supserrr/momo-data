@@ -1,0 +1,35 @@
+{
+  "log_id": 1,
+  "process_name": "xml_parser",
+  "log_level": "INFO",
+  "message": "Successfully parsed XML file",
+  "details": {
+    "file_path": "/data/raw/modified_sms_v2.xml",
+    "file_size_bytes": 1048576,
+    "parsing_method": "element_tree",
+    "validation_errors": [],
+    "performance_metrics": {
+      "memory_usage_mb": 45.2,
+      "cpu_usage_percent": 12.5
+    }
+  },
+  "records_processed": 1693,
+  "records_successful": 1685,
+  "records_failed": 8,
+  "execution_time_seconds": 45.234,
+  "created_at": "2024-05-21T10:30:00Z",
+  "error_details": {
+    "failed_records": [
+      {
+        "record_id": "SMS_001",
+        "error_type": "invalid_phone_format",
+        "error_message": "Phone number does not match expected format"
+      },
+      {
+        "record_id": "SMS_045",
+        "error_type": "missing_amount",
+        "error_message": "Amount field is required but not found"
+      }
+    ]
+  }
+}

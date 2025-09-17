@@ -1,0 +1,54 @@
+{
+  "transaction_id": 1,
+  "external_transaction_id": "TXN001",
+  "sender": {
+    "user_id": 1,
+    "phone_number": "+250788110381",
+    "display_name": "Primary Account"
+  },
+  "receiver": {
+    "user_id": 2,
+    "phone_number": "+250791666666",
+    "display_name": "Jane Smith"
+  },
+  "amount": 2000.00,
+  "fee": 0.00,
+  "currency": "RWF",
+  "transaction_date": "2024-05-10T16:30:51Z",
+  "category": {
+    "category_id": 3,
+    "category_name": "Transfer",
+    "category_code": "TRF"
+  },
+  "status": "SUCCESS",
+  "reference_number": "76662021700",
+  "description": "Transfer to Jane Smith",
+  "raw_sms_data": "You have received 2000 RWF from Jane Smith (*********013) on your mobile money account at 2024-05-10 16:30:51. Message from sender: . Your new balance:2000 RWF. Financial Transaction Id: 76662021700.",
+  "xml_attributes": {
+    "protocol": "0",
+    "address": "M-Money",
+    "date": "1715351458724",
+    "type": "1",
+    "subject": "null",
+    "toa": "null",
+    "sc_toa": "null",
+    "service_center": "+250788110381",
+    "read": "1",
+    "status": "-1",
+    "locked": "0",
+    "date_sent": "1715351451000",
+    "sub_id": "6",
+    "readable_date": "10 May 2024 4:30:58 PM",
+    "contact_name": "(Unknown)"
+  },
+  "processing_metadata": {
+    "parsed_at": "2024-05-10T16:31:00Z",
+    "cleaned_at": "2024-05-10T16:31:05Z",
+    "categorized_at": "2024-05-10T16:31:10Z",
+    "loaded_at": "2024-05-10T16:31:15Z",
+    "confidence_score": 0.95,
+    "processing_version": "1.0"
+  },
+  "created_at": "2024-05-10T16:31:15Z",
+  "updated_at": "2024-05-10T16:31:15Z"
+}

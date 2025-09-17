@@ -1,0 +1,180 @@
+{
+  "transaction": {
+    "transaction_id": 1,
+    "external_transaction_id": "TXN001",
+    "amount": 2000.00,
+    "fee": 0.00,
+    "currency": "RWF",
+    "transaction_date": "2024-05-10T16:30:51Z",
+    "status": "SUCCESS",
+    "reference_number": "76662021700",
+    "description": "Transfer to Jane Smith",
+    "raw_sms_data": "You have received 2000 RWF from Jane Smith (*********013) on your mobile money account at 2024-05-10 16:30:51. Message from sender: . Your new balance:2000 RWF. Financial Transaction Id: 76662021700.",
+    "xml_attributes": {
+      "protocol": "0",
+      "address": "M-Money",
+      "date": "1715351458724",
+      "type": "1",
+      "subject": "null",
+      "toa": "null",
+      "sc_toa": "null",
+      "service_center": "+250788110381",
+      "read": "1",
+      "status": "-1",
+      "locked": "0",
+      "date_sent": "1715351451000",
+      "sub_id": "6",
+      "readable_date": "10 May 2024 4:30:58 PM",
+      "contact_name": "(Unknown)"
+    },
+    "processing_metadata": {
+      "parsed_at": "2024-05-10T16:31:00Z",
+      "cleaned_at": "2024-05-10T16:31:05Z",
+      "categorized_at": "2024-05-10T16:31:10Z",
+      "loaded_at": "2024-05-10T16:31:15Z",
+      "confidence_score": 0.95,
+      "processing_version": "1.0",
+      "etl_pipeline_id": "ETL_20240510_001"
+    },
+    "created_at": "2024-05-10T16:31:15Z",
+    "updated_at": "2024-05-10T16:31:15Z"
+  },
+  "sender": {
+    "user_id": 1,
+    "phone_number": "+250788110381",
+    "display_name": "Primary Account",
+    "account_status": "ACTIVE",
+    "registration_date": "2024-01-01T00:00:00Z",
+    "last_transaction_date": "2024-05-21T14:38:14Z",
+    "total_transactions": 45,
+    "total_amount_sent": 125000.00,
+    "total_amount_received": 89000.00,
+    "account_balance": 25000.00,
+    "risk_profile": {
+      "risk_level": "low",
+      "verification_status": "verified",
+      "transaction_limit_daily": 100000.00,
+      "transaction_limit_monthly": 2000000.00
+    }
+  },
+  "receiver": {
+    "user_id": 2,
+    "phone_number": "+250791666666",
+    "display_name": "Jane Smith",
+    "account_status": "ACTIVE",
+    "registration_date": "2024-01-15T00:00:00Z",
+    "last_transaction_date": "2024-05-21T17:42:48Z",
+    "total_transactions": 23,
+    "total_amount_sent": 45000.00,
+    "total_amount_received": 67000.00,
+    "account_balance": 15000.00,
+    "risk_profile": {
+      "risk_level": "low",
+      "verification_status": "verified",
+      "transaction_limit_daily": 50000.00,
+      "transaction_limit_monthly": 1000000.00
+    }
+  },
+  "category": {
+    "category_id": 3,
+    "category_name": "Transfer",
+    "category_code": "TRF",
+    "description": "Money transferred between accounts",
+    "is_active": true,
+    "rules": {
+      "keywords": ["transfer", "send_money", "mobile_money"],
+      "amount_ranges": {
+        "min": 100,
+        "max": 10000000
+      },
+      "fee_structure": {
+        "percentage": 0,
+        "fixed_amount": 0
+      }
+    },
+    "statistics": {
+      "total_transactions": 45,
+      "total_amount": 125000.00,
+      "average_amount": 2777.78,
+      "success_rate": 95.56
+    }
+  },
+  "related_transactions": [
+    {
+      "transaction_id": 2,
+      "external_transaction_id": "TXN002",
+      "amount": 1000.00,
+      "transaction_date": "2024-05-10T16:31:39Z",
+      "status": "SUCCESS",
+      "description": "Payment to Jane Smith"
+    },
+    {
+      "transaction_id": 3,
+      "external_transaction_id": "TXN003",
+      "amount": 600.00,
+      "transaction_date": "2024-05-10T21:32:32Z",
+      "status": "SUCCESS",
+      "description": "Transfer to Samuel Carter"
+    }
+  ],
+  "system_logs": [
+    {
+      "log_id": 1,
+      "process_name": "xml_parser",
+      "log_level": "INFO",
+      "message": "Successfully parsed transaction from SMS",
+      "created_at": "2024-05-10T16:31:00Z"
+    },
+    {
+      "log_id": 2,
+      "process_name": "data_cleaner",
+      "log_level": "INFO",
+      "message": "Transaction data cleaned and normalized",
+      "created_at": "2024-05-10T16:31:05Z"
+    },
+    {
+      "log_id": 3,
+      "process_name": "categorizer",
+      "log_level": "INFO",
+      "message": "Transaction categorized as TRANSFER with 95% confidence",
+      "created_at": "2024-05-10T16:31:10Z"
+    },
+    {
+      "log_id": 4,
+      "process_name": "database_loader",
+      "log_level": "INFO",
+      "message": "Transaction successfully loaded to database",
+      "created_at": "2024-05-10T16:31:15Z"
+    }
+  ],
+  "statistics": {
+    "daily_stats": {
+      "date": "2024-05-10",
+      "total_transactions": 3,
+      "total_amount": 3600.00,
+      "average_amount": 1200.00,
+      "success_rate": 100.00
+    },
+    "user_stats": {
+      "sender_stats": {
+        "daily_transactions": 3,
+        "daily_amount_sent": 3600.00,
+        "monthly_transactions": 45,
+        "monthly_amount_sent": 125000.00
+      },
+      "receiver_stats": {
+        "daily_transactions": 1,
+        "daily_amount_received": 2000.00,
+        "monthly_transactions": 23,
+        "monthly_amount_received": 67000.00
+      }
+    }
+  },
+  "api_metadata": {
+    "request_id": "req_20240510_001",
+    "response_time_ms": 45,
+    "api_version": "1.0",
+    "endpoint": "/api/v1/transactions/1",
+    "timestamp": "2024-05-10T16:31:20Z"
+  }
+}
