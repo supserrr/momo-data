@@ -24,6 +24,27 @@ A full-stack application that processes mobile money (MoMo) SMS data, categorize
 
 This system processes XML-formatted SMS data from mobile money services, cleans and normalizes the data, categorizes transactions, and stores everything in a normalized MySQL database. The web dashboard provides analytics and transaction insights.
 
+## Database Foundation
+
+### Entity Relationship Diagram (ERD)
+- **ERD Documentation**: [docs/ERD_Documentation.md](./docs/ERD_Documentation.md)
+- **ERD Diagram**: [docs/ERD.png](./docs/ERD.png)
+- **Design**: Fully normalized schema with 8 core entities following 3NF principles
+- **Key Entities**: Users, Transactions, Transaction_Categories, Tags, System_Logs, Transaction_Statistics
+- **Relationships**: Many-to-many relationships resolved with junction tables
+
+### Database Implementation
+- **SQL Schema**: [database/database_setup.sql](./database/database_setup.sql)
+- **Features**: Foreign key constraints, indexes, triggers, stored procedures
+- **Performance**: Optimized for complex queries and analytics
+- **Testing**: CRUD operations included in setup script
+
+### JSON Data Modeling
+- **JSON Schemas**: [examples/json_schemas.json](./examples/json_schemas.json)
+- **Complete Example**: [examples/complete_transaction_example.json](./examples/complete_transaction_example.json)
+- **Mapping Documentation**: [examples/json_schema_mapping.md](./examples/json_schema_mapping.md)
+- **API Integration**: Proper serialization for REST endpoints
+
 ## Quick Start
 
 ### Prerequisites
@@ -74,13 +95,14 @@ This system processes XML-formatted SMS data from mobile money services, cleans 
 
 ```
 ├── README.md                    # This file
-├── .env.example                 # Environment configuration template
+├── env.example                  # Environment configuration template
 ├── requirements.txt             # Python dependencies
 ├── index.html                   # Web dashboard entry point
 ├── web/                         # Frontend assets
 │   ├── styles.css              # Dashboard styling
 │   ├── chart_handler.js        # Chart rendering and data fetching
 │   └── assets/                 # Images and icons
+│       └── architecture-diagram.png
 ├── data/                        # Data storage
 │   ├── raw/                    # Raw XML input files
 │   │   └── modified_sms_v2.xml # Sample MoMo SMS data
@@ -90,27 +112,38 @@ This system processes XML-formatted SMS data from mobile money services, cleans 
 │       ├── etl.log            # ETL process logs
 │       └── dead_letter/       # Failed processing logs
 ├── database/                    # Database schema and setup
-│   ├── setup.sql              # Normalized MySQL schema with sample data
-│   └── mysql_database_setup_backup.sql # Backup of original MySQL setup
+│   ├── database_setup.sql     # Normalized MySQL schema with sample data
+│   ├── create_file_tracking.sql
+│   ├── create_missing_tables.sql
+│   └── migrate_to_enhanced.sql
 ├── docs/                        # Documentation
-│   └── ERD.jpg                  # Entity Relationship Diagram
+│   ├── ERD_Documentation.md   # ERD design documentation
+│   └── ERD.png                # Entity Relationship Diagram
 ├── examples/                    # JSON schema examples
-│   ├── user_schema.json       # User entity JSON schema
-│   ├── transaction_schema.json # Transaction entity JSON schema
-│   ├── transaction_category_schema.json # Category entity JSON schema
-│   ├── system_log_schema.json # System log JSON schema
-│   ├── transaction_statistics_schema.json # Statistics JSON schema
 │   ├── complete_transaction_example.json # Transaction with relations
-│   └── json_schema_mapping.md # SQL to JSON mapping documentation
+│   ├── json_schema_mapping.md # SQL to JSON mapping documentation
+│   └── json_schemas.json      # All JSON schemas
 ├── etl/                         # ETL pipeline
 │   ├── config.py              # Configuration settings
 │   ├── parser.py              # Enhanced transaction parser
 │   ├── loader.py              # Database operations
+│   ├── file_tracker.py        # File processing tracking
 │   └── run.py                 # Main ETL runner
-├── api/                         # Optional API layer
+├── api/                         # FastAPI application
 │   ├── app.py                 # FastAPI application
+│   ├── app_old.py             # Previous version
+│   ├── config.py              # API configuration
 │   ├── db.py                  # Database helpers
-│   └── schemas.py             # Pydantic models
+│   ├── schemas.py             # Pydantic models
+│   └── routers/               # API route modules
+│       ├── analytics.py
+│       ├── categories.py
+│       ├── dashboard.py
+│       ├── etl.py
+│       ├── export.py
+│       ├── health.py
+│       ├── search.py
+│       └── transactions.py
 ├── scripts/                     # Utility scripts
 │   ├── run_etl.sh             # ETL execution script
 │   ├── export_json.sh         # JSON export script
@@ -255,30 +288,6 @@ The database supports transaction processing including:
 - **Failed Records**: `data/logs/dead_letter/`
 - **Web Server Logs**: Check terminal output
 
-## Database Foundation
-
-### Entity Relationship Diagram (ERD)
-- **Location**: `docs/ERD_Documentation.md`
-- **Design**: Fully normalized schema following 3NF principles
-- **Structure**: Proper normalization with many-to-many relationships
-- **Justification**: Design rationale explaining normalized approach with junction tables
-
-### Database Implementation
-- **Schema**: Normalized MySQL schema with 8 core entities
-- **Features**: Foreign key constraints, indexes, triggers, and stored procedures
-- **Performance**: Optimized for complex queries and analytics
-- **Relationships**: Many-to-many relationships resolved with junction tables
-
-### Data Processing Integration
-- **ETL Pipeline**: Integration with XML parsing and categorization
-- **Logging**: Comprehensive system logging and audit trails
-- **Analytics**: Pre-calculated statistics and multi-dimensional analysis
-- **Scalability**: Horizontal scaling support and flexible metadata storage
-
-### Team Collaboration
-- **Repository**: Updated with proper folder structure
-- **Documentation**: README with database design
-- **Organization**: Clear separation of concerns across directories
 
 ## Assignment Details
 

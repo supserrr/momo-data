@@ -80,40 +80,19 @@ The **Transaction_Statistics** entity provides pre-calculated statistics for per
 
 ## Design Decisions
 
-### Normalization Strategy
-**Third Normal Form (3NF) Compliance**: Our design eliminates data redundancy by properly normalizing all entities. This approach ensures data consistency, reduces storage requirements, and simplifies maintenance.
+For our MoMo SMS data processing system, we chose a fully normalized database design following Third Normal Form (3NF) principles. This decision was based on our analysis of the XML data structure and the need to handle complex mobile money transactions efficiently.
 
-**Referential Integrity**: We implement comprehensive foreign key constraints to maintain data consistency across all relationships. This ensures that orphaned records cannot exist and maintains data quality.
+**Why Normalization?** We decided to normalize our database because mobile money transactions involve multiple entities (users, categories, tags) that have complex relationships. By eliminating data redundancy, we ensure that when a user's information changes, we only need to update it in one place. This also helps us maintain data consistency and reduces storage requirements, which is important for a system that will process thousands of transactions.
 
-### Many-to-Many Relationships
-**Transaction-Tag Relationship**: The `transaction_tags` junction table allows transactions to be tagged with multiple labels (e.g., "High Value", "Business", "Verified"). This provides flexible categorization beyond the primary category system.
+**Many-to-Many Relationships:** We identified that transactions can have multiple tags (like "High Value" or "Business") and users can have preferences for multiple categories. To handle this properly, we created junction tables (`transaction_tags` and `user_preferences`) instead of storing comma-separated values or creating duplicate records. This approach makes querying much easier and maintains data integrity.
 
-**User-Category Preferences**: The `user_preferences` junction table allows users to set preferences for multiple transaction categories (favorites, blocked categories, notification preferences). This supports personalized user experiences.
+**Performance Considerations:** Since our dashboard needs to display analytics quickly, we added pre-calculated statistics in the `transaction_statistics` table. This way, we don't have to run expensive aggregation queries every time someone views the dashboard. We also created strategic indexes on frequently queried columns like phone numbers and transaction dates.
 
-### Performance Optimization
-**Strategic Indexing**: We implement comprehensive indexing strategies including:
-- Primary key indexes on all entities
-- Unique indexes on business keys (phone_number, external_transaction_id)
-- Composite indexes for common query patterns
-- Foreign key indexes for join performance
+**Data Integrity:** We implemented check constraints to validate data quality, such as ensuring phone numbers are at least 10 characters long and amounts are positive. We also used foreign key constraints to prevent orphaned records and maintain referential integrity.
 
-**Pre-calculated Statistics**: The `transaction_statistics` table provides pre-calculated analytics to support real-time dashboard performance without expensive aggregations.
+**Flexibility for Future Growth:** We used JSON columns for metadata like `xml_attributes` and `processing_metadata` because mobile money systems evolve quickly. This allows us to store additional information without changing the database schema every time we discover new data fields in the SMS messages.
 
-### Data Integrity
-**Check Constraints**: We implement comprehensive check constraints to ensure data quality:
-- Phone number length validation
-- Amount positivity checks
-- Date range validations
-- Enum value constraints
-
-**JSON Data Handling**: We use MySQL's native JSON data type for flexible metadata storage while maintaining queryability and indexing capabilities.
-
-### Scalability Considerations
-**Horizontal Scaling**: The normalized design supports horizontal scaling through proper partitioning strategies on date-based columns.
-
-**Audit Trail**: Comprehensive logging and statistics tables provide full audit capabilities and support compliance requirements.
-
-**Flexible Metadata**: JSON columns allow for schema evolution without structural changes to core tables.
+This design approach ensures our system can handle the complexity of mobile money transactions while remaining maintainable and scalable for future requirements.
 
 ## Relationship Cardinalities
 
