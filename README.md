@@ -22,14 +22,15 @@ A full-stack application that processes mobile money (MoMo) SMS data, categorize
 
 ## Overview
 
-This system processes XML-formatted SMS data from mobile money services, cleans and normalizes the data, categorizes transactions, and stores everything in a SQLite database. The web dashboard provides analytics and transaction insights.
+This system processes XML-formatted SMS data from mobile money services, cleans and normalizes the data, categorizes transactions, and stores everything in a normalized MySQL database. The web dashboard provides analytics and transaction insights.
 
 ## Quick Start
 
 ### Prerequisites
 
 - Python 3.8 or later
-- SQLite3
+- MySQL 8.0 or later
+- MySQL server running and accessible
 
 ### Installation
 
@@ -44,23 +45,29 @@ This system processes XML-formatted SMS data from mobile money services, cleans 
    pip install -r requirements.txt
    ```
 
-3. **Configure environment**
+3. **Setup MySQL database**
    ```bash
-   cp .env.example .env
-   # Edit .env with your database settings
+   # Create database and run setup script
+   mysql -u root -p < database/setup.sql
    ```
 
-4. **Run the ETL process**
+4. **Configure environment**
+   ```bash
+   cp .env.example .env
+   # Edit .env with your MySQL database settings
+   ```
+
+5. **Run the ETL process**
    ```bash
    ./scripts/run_etl.sh
    ```
 
-5. **Start the web server**
+6. **Start the web server**
    ```bash
    ./scripts/serve_frontend.sh
    ```
 
-6. **Open the dashboard**
+7. **Open the dashboard**
    Navigate to `http://localhost:8000` in your browser.
 
 ## Project Structure
@@ -79,12 +86,12 @@ This system processes XML-formatted SMS data from mobile money services, cleans 
 │   │   └── modified_sms_v2.xml # Sample MoMo SMS data
 │   ├── processed/              # Cleaned and processed data
 │   │   └── dashboard.json     # Dashboard data aggregates
-│   ├── db.sqlite3             # SQLite database
 │   └── logs/                  # System logs
 │       ├── etl.log            # ETL process logs
 │       └── dead_letter/       # Failed processing logs
 ├── database/                    # Database schema and setup
-│   └── database_setup.sql     # Database schema with sample data
+│   ├── setup.sql              # Normalized MySQL schema with sample data
+│   └── mysql_database_setup_backup.sql # Backup of original MySQL setup
 ├── docs/                        # Documentation
 │   └── ERD.jpg                  # Entity Relationship Diagram
 ├── examples/                    # JSON schema examples
@@ -97,10 +104,8 @@ This system processes XML-formatted SMS data from mobile money services, cleans 
 │   └── json_schema_mapping.md # SQL to JSON mapping documentation
 ├── etl/                         # ETL pipeline
 │   ├── config.py              # Configuration settings
-│   ├── parse_xml.py           # XML parsing logic
-│   ├── clean_normalize.py     # Data cleaning and normalization
-│   ├── categorize.py          # Transaction categorization
-│   ├── load_db.py             # Database operations
+│   ├── parser.py              # Enhanced transaction parser
+│   ├── loader.py              # Database operations
 │   └── run.py                 # Main ETL runner
 ├── api/                         # Optional API layer
 │   ├── app.py                 # FastAPI application
@@ -111,9 +116,7 @@ This system processes XML-formatted SMS data from mobile money services, cleans 
 │   ├── export_json.sh         # JSON export script
 │   └── serve_frontend.sh      # Frontend server script
 └── tests/                       # Test suite
-    ├── test_parse_xml.py
-    ├── test_clean_normalize.py
-    └── test_categorize.py
+    └── (test files removed - using enhanced parser)
 ```
 
 ## Features
@@ -122,7 +125,7 @@ This system processes XML-formatted SMS data from mobile money services, cleans 
 - **XML Parsing**: Extracts transaction data from MoMo SMS XML files
 - **Data Cleaning**: Normalizes phone numbers, amounts, and dates
 - **Transaction Categorization**: Categorizes transactions by type
-- **Database Storage**: Stores processed data in SQLite with proper relationships
+- **Database Storage**: Stores processed data in normalized MySQL database with proper relationships
 
 ### Web Dashboard
 - **Transaction Analytics**: Charts and tables showing transaction patterns
@@ -142,8 +145,12 @@ This system processes XML-formatted SMS data from mobile money services, cleans 
 Create a `.env` file based on `.env.example`:
 
 ```bash
-# Database configuration
-DATABASE_URL=sqlite:///data/db.sqlite3
+# MySQL Database configuration
+MYSQL_HOST=localhost
+MYSQL_PORT=3306
+MYSQL_DATABASE=momo_sms_processing
+MYSQL_USER=momo_app
+MYSQL_PASSWORD=secure_password_123
 
 # ETL settings
 XML_FILE_PATH=data/raw/momo.xml
@@ -237,9 +244,10 @@ The database supports transaction processing including:
 - Verify web server is running on correct port
 
 **Database errors**
-- Check SQLite file permissions
-- Verify database schema is up to date
-- Review database logs for constraint violations
+- Check MySQL server is running and accessible
+- Verify database credentials in environment variables
+- Ensure database schema is up to date
+- Review MySQL logs for constraint violations
 
 ### Logs
 
@@ -251,21 +259,21 @@ The database supports transaction processing including:
 
 ### Entity Relationship Diagram (ERD)
 - **Location**: `docs/ERD_Documentation.md`
-- **Design**: Simplified schema with 4 core entities for ETL processing
-- **Structure**: Flat, denormalized design for straightforward data access
-- **Justification**: Design rationale explaining our simplified approach
+- **Design**: Fully normalized schema following 3NF principles
+- **Structure**: Proper normalization with many-to-many relationships
+- **Justification**: Design rationale explaining normalized approach with junction tables
 
 ### Database Implementation
-- **Schema**: Implemented schema for transaction processing
-- **Features**: Indexing, data validation, and ETL integration
-- **Performance**: For dashboard analytics and processing
-- **Flexibility**: JSON metadata storage and audit trails
+- **Schema**: Normalized MySQL schema with 8 core entities
+- **Features**: Foreign key constraints, indexes, triggers, and stored procedures
+- **Performance**: Optimized for complex queries and analytics
+- **Relationships**: Many-to-many relationships resolved with junction tables
 
 ### Data Processing Integration
 - **ETL Pipeline**: Integration with XML parsing and categorization
-- **Logging**: Process monitoring and error tracking
-- **Analytics**: Pre-calculated statistics for dashboard performance
-- **Backup**: Data preservation and migration capabilities
+- **Logging**: Comprehensive system logging and audit trails
+- **Analytics**: Pre-calculated statistics and multi-dimensional analysis
+- **Scalability**: Horizontal scaling support and flexible metadata storage
 
 ### Team Collaboration
 - **Repository**: Updated with proper folder structure

@@ -1,23 +1,25 @@
 #!/usr/bin/env python3
 """
-ETL Pipeline for MoMo SMS Data Processing
+Enhanced ETL Pipeline for MTN MobileMoney SMS Data Processing
+Uses the new enhanced parser with detailed message type categorization
 Team 11 - Enterprise Web Development
 """
 
 import argparse
 import logging
 import sys
+import json
 from pathlib import Path
 from datetime import datetime
+from typing import List, Dict, Any
 
 # Add parent directory to path for imports
 sys.path.append(str(Path(__file__).parent.parent))
 
 from etl.config import XML_INPUT_FILE, ETL_LOG_FILE, LOG_LEVEL
-from etl.parse_xml import XMLParser
-from etl.clean_normalize import DataCleaner
-from etl.categorize import TransactionCategorizer
-from etl.load_db import DatabaseLoader
+from etl.parser import EnhancedMTNParser, ParsedTransaction
+from etl.loader import MySQLDatabaseLoader
+from etl.file_tracker import FileTracker
 
 def setup_logging(log_file: Path = ETL_LOG_FILE, level: str = LOG_LEVEL):
     """Setup logging configuration."""
@@ -35,13 +37,139 @@ def setup_logging(log_file: Path = ETL_LOG_FILE, level: str = LOG_LEVEL):
     )
     
     logger = logging.getLogger(__name__)
-    logger.info(f"ETL process started - Log level: {level}")
+    logger.info(f"Enhanced ETL process started - Log level: {level}")
     return logger
 
-def run_etl_pipeline(xml_file: Path, export_json: bool = True) -> dict:
+def parse_xml_with_enhanced_parser(xml_file: Path) -> List[ParsedTransaction]:
+    """Parse XML file using the enhanced parser."""
+    import xml.etree.ElementTree as ET
+    
+    logger = logging.getLogger(__name__)
+    parser = EnhancedMTNParser()
+    transactions = []
+    
+    try:
+        # Parse XML file
+        tree = ET.parse(xml_file)
+        root = tree.getroot()
+        
+        # Extract SMS elements
+        sms_elements = root.findall('.//sms')
+        logger.info(f"Found {len(sms_elements)} SMS elements")
+        
+        # Process each SMS
+        for i, sms in enumerate(sms_elements):
+            try:
+                body = sms.get('body', '')
+                date = sms.get('date', '')
+                readable_date = sms.get('readable_date', '')
+                
+                # Skip if not a MoMo SMS
+                if not _is_momo_sms(body, sms.get('address', '')):
+                    continue
+                
+                # Parse timestamp
+                timestamp = None
+                if date:
+                    try:
+                        timestamp_int = int(date)
+                        dt = datetime.fromtimestamp(timestamp_int / 1000)
+                        timestamp = dt.isoformat()
+                    except:
+                        pass
+                elif readable_date:
+                    timestamp = readable_date
+                
+                # Parse message with enhanced parser
+                transaction = parser.parse_message(body, timestamp)
+                if transaction:
+                    transactions.append(transaction)
+                    
+            except Exception as e:
+                logger.error(f"Error processing SMS {i}: {e}")
+                continue
+        
+        logger.info(f"Successfully parsed {len(transactions)} transactions")
+        return transactions
+        
+    except Exception as e:
+        logger.error(f"Error parsing XML file: {e}")
+        raise
+
+def _is_momo_sms(body: str, address: str) -> bool:
+    """Check if SMS is a MoMo transaction."""
+    # Check address
+    momo_addresses = ['M-Money', 'MTN', 'MoMo', 'Mobile Money']
+    if any(addr.lower() in address.lower() for addr in momo_addresses):
+        return True
+    
+    # Check body content
+    momo_keywords = [
+        'RWF', 'UGX', 'deposit', 'withdraw', 'transfer', 'payment',
+        'balance', 'mobile money', 'momo', 'transaction', 'TxId',
+        'received', 'sent', 'completed', 'fee', 'new balance'
+    ]
+    
+    body_lower = body.lower()
+    return any(keyword.lower() in body_lower for keyword in momo_keywords)
+
+def convert_to_database_format(transactions: List[ParsedTransaction]) -> List[Dict[str, Any]]:
+    """Convert ParsedTransaction objects to database format."""
+    db_transactions = []
+    
+    for transaction in transactions:
+        db_transaction = {
+            'amount': transaction.amount,
+            'phone': transaction.recipient_phone or transaction.sender_phone,
+            'date': transaction.date,
+            'reference': transaction.transaction_id or transaction.financial_transaction_id,
+            'type': transaction.transaction_type,
+            'transaction_type': transaction.transaction_type,
+            'direction': transaction.direction,
+            'status': 'SUCCESS',  # All parsed transactions are successful
+            'category': transaction.category,
+            'category_confidence': transaction.confidence,
+            'confidence': transaction.confidence,
+            'recipient_name': transaction.recipient_name,
+            'sender_name': transaction.sender_name,
+            'sender_phone': transaction.sender_phone,
+            'recipient_phone': transaction.recipient_phone,
+            'momo_code': transaction.momo_code,
+            'sender_momo_id': transaction.sender_momo_id,
+            'agent_momo_number': transaction.agent_momo_number,
+            'business_name': transaction.business_name,
+            'fee': transaction.fee,
+            'new_balance': transaction.new_balance,
+            'financial_transaction_id': transaction.financial_transaction_id,
+            'external_transaction_id': transaction.transaction_id,
+            'personal_id': transaction.sender_momo_id or transaction.momo_code,
+            'original_data': transaction.original_message,
+            'original_message': transaction.original_message,
+            'raw_data': transaction.original_message,
+            'xml_tag': 'sms',
+            'xml_attributes': {
+                'transaction_type': transaction.transaction_type,
+                'category': transaction.category,
+                'direction': transaction.direction,
+                'fee': transaction.fee,
+                'new_balance': transaction.new_balance,
+                'business_name': transaction.business_name,
+                'agent_momo_number': transaction.agent_momo_number,
+                'financial_transaction_id': transaction.financial_transaction_id,
+                'external_transaction_id': transaction.external_transaction_id
+            },
+            'parsed_at': datetime.now().isoformat(),
+            'cleaned_at': datetime.now().isoformat(),
+            'categorized_at': datetime.now().isoformat()
+        }
+        
+        db_transactions.append(db_transaction)
+    
+    return db_transactions
+
+def run_enhanced_etl_pipeline(xml_file: Path, export_json: bool = True) -> dict:
     """
-    Run the complete ETL pipeline.
-    This function orchestrates the entire data processing workflow.
+    Run the enhanced ETL pipeline with detailed message type parsing.
     
     Args:
         xml_file: Path to XML input file
@@ -53,49 +181,53 @@ def run_etl_pipeline(xml_file: Path, export_json: bool = True) -> dict:
     logger = logging.getLogger(__name__)
     start_time = datetime.now()
     
+    # Initialize file tracker
+    file_tracker = FileTracker()
+    
     try:
-        logger.info("=" * 50)
-        logger.info("Starting MoMo ETL Pipeline")
-        logger.info("=" * 50)
+        logger.info("=" * 60)
+        logger.info("Starting Enhanced MTN MobileMoney ETL Pipeline")
+        logger.info("=" * 60)
         
-        # Step 1: Parse XML
-        logger.info("Step 1: Parsing XML data...")
-        parser = XMLParser(xml_file)
-        raw_transactions = parser.parse()
-        parse_summary = parser.get_parsing_summary()
-        logger.info(f"Parsed {parse_summary['total_parsed']} transactions")
+        # Check if file should be processed
+        if not file_tracker.should_process_file(xml_file):
+            logger.info(f"File {xml_file.name} has already been processed and hasn't changed. Skipping...")
+            return {'status': 'skipped', 'message': 'File already processed and unchanged'}
         
-        if not raw_transactions:
+        logger.info(f"Processing file: {xml_file.name}")
+        
+        # Step 1: Parse XML with enhanced parser
+        logger.info("Step 1: Parsing XML with enhanced message type detection...")
+        parsed_transactions = parse_xml_with_enhanced_parser(xml_file)
+        
+        if not parsed_transactions:
             logger.warning("No transactions found in XML file")
             return {'status': 'warning', 'message': 'No transactions found'}
         
-        # Step 2: Clean and normalize
-        logger.info("Step 2: Cleaning and normalizing data...")
-        cleaner = DataCleaner()
-        cleaned_transactions = cleaner.clean_transactions(raw_transactions)
-        cleaning_summary = cleaner.get_cleaning_summary()
-        logger.info(f"Cleaned {cleaning_summary['successfully_cleaned']} transactions")
+        # Analyze transaction types
+        type_stats = {}
+        category_stats = {}
+        for transaction in parsed_transactions:
+            type_stats[transaction.transaction_type] = type_stats.get(transaction.transaction_type, 0) + 1
+            category_stats[transaction.category] = category_stats.get(transaction.category, 0) + 1
         
-        if not cleaned_transactions:
-            logger.error("No valid transactions after cleaning")
-            return {'status': 'error', 'message': 'No valid transactions after cleaning'}
+        logger.info(f"Transaction Types: {type_stats}")
+        logger.info(f"Transaction Categories: {category_stats}")
         
-        # Step 3: Categorize
-        logger.info("Step 3: Categorizing transactions...")
-        categorizer = TransactionCategorizer()
-        categorized_transactions = categorizer.categorize_transactions(cleaned_transactions)
-        categorization_summary = categorizer.get_categorization_summary()
-        logger.info(f"Categorized {categorization_summary['categorized']} transactions")
+        # Step 2: Convert to database format
+        logger.info("Step 2: Converting to database format...")
+        db_transactions = convert_to_database_format(parsed_transactions)
+        logger.info(f"Converted {len(db_transactions)} transactions to database format")
         
-        # Step 4: Load to database
-        logger.info("Step 4: Loading to database...")
-        with DatabaseLoader() as db_loader:
-            loading_summary = db_loader.load_transactions(categorized_transactions)
+        # Step 3: Load to database
+        logger.info("Step 3: Loading to MySQL database...")
+        with MySQLDatabaseLoader() as db_loader:
+            loading_summary = db_loader.load_transactions(db_transactions)
             logger.info(f"Loaded {loading_summary['successfully_loaded']} transactions to database")
             
-            # Step 5: Export dashboard JSON
+            # Step 4: Export dashboard JSON
             if export_json:
-                logger.info("Step 5: Exporting dashboard data...")
+                logger.info("Step 4: Exporting dashboard data...")
                 dashboard_data = db_loader.export_dashboard_json()
                 logger.info("Dashboard data exported successfully")
             
@@ -111,28 +243,44 @@ def run_etl_pipeline(xml_file: Path, export_json: bool = True) -> dict:
             'duration_seconds': duration,
             'start_time': start_time.isoformat(),
             'end_time': end_time.isoformat(),
-            'steps': {
-                'parsing': parse_summary,
-                'cleaning': cleaning_summary,
-                'categorization': categorization_summary,
-                'loading': loading_summary
+            'parsing_stats': {
+                'total_parsed': len(parsed_transactions),
+                'transaction_types': type_stats,
+                'transaction_categories': category_stats
             },
+            'loading': loading_summary,
             'database_stats': db_stats,
-            'total_processed': len(raw_transactions),
+            'total_processed': len(parsed_transactions),
             'final_loaded': loading_summary['successfully_loaded']
         }
         
-        logger.info("=" * 50)
-        logger.info("ETL Pipeline Completed Successfully")
+        # Mark file as processed
+        file_tracker.mark_file_processed(
+            xml_file, 
+            loading_summary['successfully_loaded'], 
+            'SUCCESS'
+        )
+        
+        logger.info("=" * 60)
+        logger.info("Enhanced ETL Pipeline Completed Successfully")
         logger.info(f"Duration: {duration:.2f} seconds")
         logger.info(f"Total processed: {final_summary['total_processed']}")
         logger.info(f"Final loaded: {final_summary['final_loaded']}")
-        logger.info("=" * 50)
+        logger.info("=" * 60)
         
         return final_summary
         
     except Exception as e:
-        logger.error(f"ETL pipeline failed: {e}")
+        logger.error(f"Enhanced ETL pipeline failed: {e}")
+        
+        # Mark file as failed
+        file_tracker.mark_file_processed(
+            xml_file, 
+            0, 
+            'FAILED', 
+            str(e)
+        )
+        
         return {
             'status': 'error',
             'message': str(e),
@@ -142,8 +290,8 @@ def run_etl_pipeline(xml_file: Path, export_json: bool = True) -> dict:
         }
 
 def main():
-    """Main entry point for ETL script."""
-    parser = argparse.ArgumentParser(description='MoMo Data ETL Pipeline')
+    """Main entry point for enhanced ETL script."""
+    parser = argparse.ArgumentParser(description='Enhanced MTN MobileMoney Data ETL Pipeline')
     parser.add_argument(
         '--xml', 
         type=Path, 
@@ -164,7 +312,12 @@ def main():
     parser.add_argument(
         '--dry-run', 
         action='store_true',
-        help='Parse and clean data without loading to database'
+        help='Parse data without loading to database'
+    )
+    parser.add_argument(
+        '--analyze', 
+        action='store_true',
+        help='Analyze message types and show statistics'
     )
     
     args = parser.parse_args()
@@ -178,35 +331,55 @@ def main():
         sys.exit(1)
     
     try:
-        if args.dry_run:
-            logger.info("Running in dry-run mode...")
-            # Just parse and clean, don't load to database
-            parser = XMLParser(args.xml)
-            raw_transactions = parser.parse()
+        if args.dry_run or args.analyze:
+            logger.info("Running in analysis mode...")
+            # Parse and analyze without loading to database
+            parsed_transactions = parse_xml_with_enhanced_parser(args.xml)
             
-            cleaner = DataCleaner()
-            cleaned_transactions = cleaner.clean_transactions(raw_transactions)
+            if not parsed_transactions:
+                logger.warning("No transactions found")
+                sys.exit(0)
             
-            categorizer = TransactionCategorizer()
-            categorized_transactions = categorizer.categorize_transactions(cleaned_transactions)
+            # Analyze transaction types
+            type_stats = {}
+            category_stats = {}
+            direction_stats = {}
             
-            logger.info(f"Dry run completed: {len(categorized_transactions)} transactions processed")
-            logger.info("Sample transaction:")
-            if categorized_transactions:
-                sample = categorized_transactions[0]
-                logger.info(f"  Amount: {sample.get('amount')}")
-                logger.info(f"  Phone: {sample.get('phone')}")
-                logger.info(f"  Category: {sample.get('category')}")
-                logger.info(f"  Confidence: {sample.get('category_confidence')}")
+            for transaction in parsed_transactions:
+                type_stats[transaction.transaction_type] = type_stats.get(transaction.transaction_type, 0) + 1
+                category_stats[transaction.category] = category_stats.get(transaction.category, 0) + 1
+                direction_stats[transaction.direction] = direction_stats.get(transaction.direction, 0) + 1
+            
+            logger.info(f"Analysis Results:")
+            logger.info(f"  Total transactions: {len(parsed_transactions)}")
+            logger.info(f"  Transaction types: {type_stats}")
+            logger.info(f"  Categories: {category_stats}")
+            logger.info(f"  Directions: {direction_stats}")
+            
+            if args.analyze:
+                # Show sample transactions
+                logger.info("\nSample transactions:")
+                for i, transaction in enumerate(parsed_transactions[:5]):
+                    logger.info(f"  {i+1}. {transaction.transaction_type} - {transaction.category} - {transaction.amount} RWF")
+                    logger.info(f"     Direction: {transaction.direction}")
+                    if transaction.recipient_name:
+                        logger.info(f"     Recipient: {transaction.recipient_name}")
+                    if transaction.business_name:
+                        logger.info(f"     Business: {transaction.business_name}")
+                    logger.info(f"     Confidence: {transaction.confidence}")
+                    logger.info("")
         else:
-            # Run full ETL pipeline
-            summary = run_etl_pipeline(args.xml, export_json=not args.no_export)
+            # Run full enhanced ETL pipeline
+            summary = run_enhanced_etl_pipeline(args.xml, export_json=not args.no_export)
             
             if summary['status'] == 'success':
-                logger.info("ETL pipeline completed successfully")
+                logger.info("Enhanced ETL pipeline completed successfully")
+                sys.exit(0)
+            elif summary['status'] == 'skipped':
+                logger.info(f"ETL pipeline skipped: {summary.get('message', 'File already processed')}")
                 sys.exit(0)
             else:
-                logger.error(f"ETL pipeline failed: {summary.get('message', 'Unknown error')}")
+                logger.error(f"Enhanced ETL pipeline failed: {summary.get('message', 'Unknown error')}")
                 sys.exit(1)
                 
     except KeyboardInterrupt:

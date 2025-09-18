@@ -241,6 +241,12 @@
                 <canvas id="categoryChart"></canvas>
             </div>
             
+            <!-- Transaction Types by Amount Horizontal Bar Chart - Full Width -->
+            <div class="chart-container transaction-types-chart-container" style="background: var(--brutal-orange); margin-bottom: 2rem;">
+                <h3 class="nb-text-center" style="font-weight: 700; color: var(--brutal-black); text-transform: uppercase; margin-bottom: 1.5rem;">Transaction Types by Amount</h3>
+                <canvas id="transactionTypesChart"></canvas>
+            </div>
+            
             <!-- Amount Distribution Chart -->
             <div class="chart-container amount-chart-container" style="background: var(--brutal-purple); margin-bottom: 2rem;">
                 <h3 class="nb-text-center" style="font-weight: 700; color: var(--brutal-black); text-transform: uppercase; margin-bottom: 1.5rem;">Transaction Amount Distribution</h3>
@@ -259,24 +265,36 @@
     <section class="nb-p-2 nb-p-md-4" id="transactions" style="background: var(--brutal-bg);">
         <div class="main-container">
             <div class="nb-table-container">
-                <div class="nb-table-header">Recent Transactions</div>
+                <div class="nb-table-header">
+                    <span>Recent Transactions</span>
+                    <div class="minimal-filters">
+                        <input type="text" id="searchFilter" placeholder="Search..." class="minimal-search">
+                        <select id="typeFilter" class="minimal-select">
+                            <option value="">All Types</option>
+                            <option value="DEPOSIT">Deposit</option>
+                            <option value="TRANSFER">Transfer</option>
+                            <option value="PAYMENT">Payment</option>
+                            <option value="RECEIVE">Receive</option>
+                            <option value="AIRTIME">Airtime</option>
+                            <option value="DATA_BUNDLE">Data Bundle</option>
+                        </select>
+                        <button id="clearFilters" class="minimal-btn">Clear</button>
+                    </div>
+                </div>
                 <table class="nb-table" id="transactionsTable">
                     <thead>
                         <tr>
                             <th>Date</th>
                             <th>Type</th>
                             <th>Amount</th>
-                            <th>Phone</th>
-                            <th>Reference</th>
-                            <th>Recipient</th>
-                            <th>Personal ID</th>
+                            <th>Direction</th>
                             <th>Status</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody id="transactionsBody">
                         <tr>
-                            <td colspan="9" class="nb-text-center">
+                            <td colspan="6" class="nb-text-center">
                                 <div class="skeleton" style="display: inline-block; width: 200px; height: 40px; margin: 1rem auto;"></div>
                                 <p style="font-weight: 600; color: var(--brutal-black); text-transform: uppercase; margin-top: 1rem;">Loading transactions...</p>
                             </td>
@@ -347,6 +365,6 @@
     </footer>
 
     <!-- Load Dashboard Data -->
-    <script src="web/chart_handler.js"></script>
+    <script src="web/chart_handler.js?v=6"></script>
 </body>
 </html>

@@ -15,7 +15,7 @@ LOGS_DIR = DATA_DIR / "logs"
 DEAD_LETTER_DIR = LOGS_DIR / "dead_letter"
 
 # File paths
-XML_INPUT_FILE = RAW_DIR / "momo.xml"
+XML_INPUT_FILE = RAW_DIR / "modified_sms_v2.xml"
 DATABASE_FILE = DATA_DIR / "db.sqlite3"
 DASHBOARD_JSON_FILE = PROCESSED_DIR / "dashboard.json"
 ETL_LOG_FILE = LOGS_DIR / "etl.log"
@@ -23,9 +23,19 @@ ETL_LOG_FILE = LOGS_DIR / "etl.log"
 # Database configuration
 DATABASE_URL = f"sqlite:///{DATABASE_FILE}"
 
+# MySQL configuration
+MYSQL_CONFIG = {
+    'host': os.getenv('MYSQL_HOST', 'localhost'),
+    'port': int(os.getenv('MYSQL_PORT', 3306)),
+    'database': os.getenv('MYSQL_DATABASE', 'momo_sms_processing'),
+    'user': os.getenv('MYSQL_USER', 'root'),
+    'password': os.getenv('MYSQL_PASSWORD', ''),
+    'unix_socket': '/tmp/mysql.sock'
+}
+
 # ETL thresholds and limits
-MAX_AMOUNT = 10000000  # 10M UGX
-MIN_AMOUNT = 100  # 100 UGX
+MAX_AMOUNT = 10000000  
+MIN_AMOUNT = 100  
 MAX_PHONE_LENGTH = 15
 MIN_PHONE_LENGTH = 10
 
@@ -41,10 +51,10 @@ TRANSACTION_CATEGORIES = {
     'OTHER': ['other', 'unknown', 'misc']
 }
 
-# Phone number patterns (Uganda)
+# Phone number patterns (Rwanda)
 PHONE_PATTERNS = [
-    r'^\+256\d{9}$',  # +256XXXXXXXXX
-    r'^256\d{9}$',    # 256XXXXXXXXX
+    r'^\+250\d{9}$',  # +250XXXXXXXXX
+    r'^250\d{9}$',    # 250XXXXXXXXX
     r'^0\d{9}$'       # 0XXXXXXXXX
 ]
 

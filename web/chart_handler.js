@@ -1,7 +1,7 @@
 // MoMo Dashboard - Chart Handler with NeoBrutalism Style
 // Handles data fetching and Chart.js visualization
 
-// Enhanced Brutalist Color Palette
+// Enhanced Brutalist Color Palette with more colors for sub-categories
 const COLORS = {
     yellow: '#ffc947',
     pink: '#ff90e8',
@@ -10,6 +10,16 @@ const COLORS = {
     blue: '#90b3ff',
     orange: '#ffa500',
     green: '#90ff90',
+    red: '#ff6b6b',
+    cyan: '#4ecdc4',
+    indigo: '#6c5ce7',
+    teal: '#00b894',
+    coral: '#fd79a8',
+    lime: '#a4b0be',
+    amber: '#fdcb6e',
+    emerald: '#00cec9',
+    rose: '#e84393',
+    violet: '#a29bfe',
     black: '#000000',
     white: '#ffffff',
     gray: '#f5f5f5',
@@ -45,13 +55,16 @@ Chart.defaults.plugins.legend.labels.textTransform = BRUTALIST_CONFIG.textTransf
 // Global chart instances
 let charts = {};
 let allTransactions = [];
+let filteredTransactions = [];
 let currentPage = 1;
 let pageSize = 10; // Default page size
 let totalPages = 1;
+let currentFilters = {};
 
 // Initialize dashboard on DOM load
 document.addEventListener('DOMContentLoaded', function() {
     loadDashboardData();
+    initializeFilters();
     
     // Add load more button event listener
     // Pagination event listeners
@@ -80,6 +93,7 @@ async function loadDashboardData() {
         console.log('Loading unified dashboard data...');
         
         // Load ALL transactions first - this is our single source of truth
+        console.log('Starting to load transactions...');
         const allTransactionsData = await loadAllTransactions();
         console.log('Loaded transactions:', allTransactionsData.length);
         
@@ -87,11 +101,22 @@ async function loadDashboardData() {
             throw new Error('No transaction data available');
         }
         
-        // Generate all other data from the transactions
-        const unifiedData = generateUnifiedDataFromTransactions(allTransactionsData);
+        // Load transaction types by amount data
+        console.log('Loading transaction types by amount...');
+        const transactionTypesData = await loadTransactionTypesByAmount();
+        console.log('Loaded transaction types:', transactionTypesData);
         
-        // Store all transactions for pagination
+        // Generate all other data from the transactions
+        console.log('Generating unified data...');
+        const unifiedData = generateUnifiedDataFromTransactions(allTransactionsData);
+        console.log('Unified data generated:', unifiedData);
+        
+        // Add transaction types data to unified data
+        unifiedData.charts.transaction_types_by_amount = transactionTypesData;
+        
+        // Store all transactions for pagination and filtering
         allTransactions = allTransactionsData;
+        filteredTransactions = [...allTransactionsData];
     currentPage = 1;
         totalPages = Math.ceil(allTransactions.length / pageSize);
         
@@ -119,6 +144,7 @@ async function loadDashboardData() {
             charts: {
                 monthly_stats: [],
                 category_distribution: [],
+                transaction_types_by_amount: [],
                 hourly_pattern: [],
                 amount_distribution: []
             }
@@ -139,13 +165,16 @@ async function loadAllTransactions() {
         
         while (hasMore && consecutiveErrors < 3) {
             try {
-                const transactionsResponse = await fetch(`http://localhost:8000/api/transactions?limit=${limit}&offset=${offset}`);
+                console.log(`Fetching transactions: offset=${offset}, limit=${limit}`);
+                const transactionsResponse = await fetch(`http://localhost:8001/api/transactions?limit=${limit}&offset=${offset}`);
+                console.log(`Response status: ${transactionsResponse.status}`);
                 if (!transactionsResponse.ok) {
                     console.warn(`API error at offset ${offset}, stopping pagination`);
                     break;
                 }
                 
                 const batch = await transactionsResponse.json();
+                console.log(`Received ${batch.length} transactions in batch`);
                 
             // Check if we got an error response
                 if (batch.success === false) {
@@ -171,6 +200,34 @@ async function loadAllTransactions() {
     }
     
     return allTransactionsData;
+}
+
+// Load transaction types by amount data from API
+async function loadTransactionTypesByAmount() {
+    try {
+        console.log('Fetching transaction types by amount...');
+        const response = await fetch('http://localhost:8001/api/transaction-types-by-amount');
+        console.log(`Response status: ${response.status}`);
+        
+        if (!response.ok) {
+            console.warn('API error for transaction types by amount');
+            return [];
+        }
+        
+        const data = await response.json();
+        console.log('Received transaction types data:', data);
+        
+        // Check if we got an error response
+        if (data.success === false) {
+            console.warn('API returned error for transaction types by amount');
+            return [];
+        }
+        
+        return data;
+    } catch (error) {
+        console.warn('Error fetching transaction types by amount:', error);
+        return [];
+    }
 }
 
 // Generate unified data from transactions - single source of truth
@@ -200,30 +257,20 @@ function generateUnifiedDataFromTransactions(transactions) {
     
     // Generate category distribution from transactions
     const categoryStats = {};
+    
     transactions.forEach(tx => {
-        let category = tx.category || tx.type || 'UNKNOWN';
+        // Use transaction type instead of category to show main transaction types
+        let transactionType = tx.type || tx.transaction_type || 'UNKNOWN';
         
-        // Normalize category names for display
-        if (category === 'DATA_BUNDLE') category = 'Data Bundle';
-        else if (category === 'AIRTIME') category = 'Airtime';
-        else if (category === 'DEPOSIT') category = 'Deposit';
-        else if (category === 'WITHDRAWAL') category = 'Withdrawal';
-        else if (category === 'PAYMENT') category = 'Payment';
-        else if (category === 'TRANSFER') category = 'Transfer';
-        else if (category === 'QUERY') category = 'Query';
-        else if (category === 'OTHER') category = 'Other';
-        else if (category === 'UNKNOWN') category = 'Unknown';
-        else if (category === 'PURCHASE') category = 'Purchase';
-        else if (category === 'SEND') category = 'Send';
-        else if (category === 'RECEIVE') category = 'Receive';
-        else if (category === 'CASH_OUT') category = 'Cash Out';
+        // Clean up the type name for better display
+        const displayType = transactionType.replace(/_/g, ' ').toUpperCase();
         
-        if (!categoryStats[category]) {
-            categoryStats[category] = { count: 0, total_amount: 0, amounts: [] };
+        if (!categoryStats[displayType]) {
+            categoryStats[displayType] = { count: 0, total_amount: 0, amounts: [] };
         }
-        categoryStats[category].count++;
-        categoryStats[category].total_amount += tx.amount || 0;
-        categoryStats[category].amounts.push(tx.amount || 0);
+        categoryStats[displayType].count++;
+        categoryStats[displayType].total_amount += tx.amount || 0;
+        categoryStats[displayType].amounts.push(tx.amount || 0);
     });
     
     const categoryDistribution = Object.entries(categoryStats).map(([category, stats]) => ({
@@ -239,6 +286,10 @@ function generateUnifiedDataFromTransactions(transactions) {
         const monthlyStats = {};
     transactions.forEach(tx => {
             const date = new Date(tx.date);
+            if (isNaN(date.getTime())) {
+                console.warn('Invalid date for transaction:', tx.date, tx);
+                return;
+            }
             const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
             if (!monthlyStats[monthKey]) {
                 monthlyStats[monthKey] = { count: 0, volume: 0 };
@@ -250,6 +301,8 @@ function generateUnifiedDataFromTransactions(transactions) {
     const monthlyStatsArray = Object.entries(monthlyStats)
             .sort(([a], [b]) => a.localeCompare(b))
         .map(([month, data]) => ({ month, ...data }));
+    
+    console.log('Generated monthly stats:', monthlyStatsArray);
     
     // Generate hourly pattern from transactions
     const hourlyPattern = Array.from({length: 24}, (_, i) => ({
@@ -347,19 +400,24 @@ function updateCharts(data) {
     // Use chart data from parsed SMS data
     updateVolumeChart(data.charts?.monthly_stats || []);
     updateCategoryChart(data.charts?.category_distribution || []);
+    updateTransactionTypesChart(data.charts?.transaction_types_by_amount || []);
     updateAmountChart(data.charts?.amount_distribution || []);
     updateHourlyChart(data.charts?.hourly_pattern || []);
 }
 
 // This function is no longer needed - we use generateUnifiedDataFromTransactions instead
 
+
 // Volume by Month Chart with Brutalist Styling
 function updateVolumeChart(monthlyStats) {
     const ctx = document.getElementById('volumeChart');
     if (!ctx) return;
     
+    console.log('updateVolumeChart called with:', monthlyStats);
+    
     // Handle empty data
     if (!monthlyStats || monthlyStats.length === 0) {
+        console.log('No monthly stats data, destroying chart');
         if (charts.volume) charts.volume.destroy();
         return;
     }
@@ -533,7 +591,83 @@ function updateVolumeChart(monthlyStats) {
     });
 }
 
-// Category Distribution Chart with Brutalist Styling
+// Group categories into simplified, meaningful groups
+function groupCategories(categories) {
+    const groups = {
+        'Deposits': {
+            groupName: 'Deposits',
+            count: 0,
+            total_amount: 0,
+            subCategories: []
+        },
+        'Transfers': {
+            groupName: 'Transfers',
+            count: 0,
+            total_amount: 0,
+            subCategories: []
+        },
+        'Payments': {
+            groupName: 'Payments',
+            count: 0,
+            total_amount: 0,
+            subCategories: []
+        },
+        'Mobile Services': {
+            groupName: 'Mobile Services',
+            count: 0,
+            total_amount: 0,
+            subCategories: []
+        },
+        'Other': {
+            groupName: 'Other',
+            count: 0,
+            total_amount: 0,
+            subCategories: []
+        }
+    };
+    
+    // Group categories based on their names
+    categories.forEach(category => {
+        const categoryName = category.category;
+        const count = parseInt(category.count) || 0;
+        const totalAmount = parseFloat(category.total_amount) || 0;
+        
+        if (categoryName.includes('DEPOSIT') || categoryName.includes('Deposit')) {
+            groups['Deposits'].count += count;
+            groups['Deposits'].total_amount += totalAmount;
+            groups['Deposits'].subCategories.push(categoryName);
+        } else if (categoryName.includes('TRANSFER') || categoryName.includes('Transfer')) {
+            groups['Transfers'].count += count;
+            groups['Transfers'].total_amount += totalAmount;
+            groups['Transfers'].subCategories.push(categoryName);
+        } else if (categoryName.includes('PAYMENT') || categoryName.includes('Payment')) {
+            groups['Payments'].count += count;
+            groups['Payments'].total_amount += totalAmount;
+            groups['Payments'].subCategories.push(categoryName);
+        } else if (categoryName.includes('AIRTIME') || categoryName.includes('Airtime') || 
+                   categoryName.includes('DATA') || categoryName.includes('Data')) {
+            groups['Mobile Services'].count += count;
+            groups['Mobile Services'].total_amount += totalAmount;
+            groups['Mobile Services'].subCategories.push(categoryName);
+        } else {
+            groups['Other'].count += count;
+            groups['Other'].total_amount += totalAmount;
+            groups['Other'].subCategories.push(categoryName);
+        }
+    });
+    
+    // Calculate averages and filter out empty groups
+    const result = Object.values(groups)
+        .filter(group => group.count > 0)
+        .map(group => ({
+            ...group,
+            avg_amount: group.count > 0 ? group.total_amount / group.count : 0
+        }));
+    
+    return result;
+}
+
+// Category Distribution Chart with Brutalist Styling - Simplified Groups
 function updateCategoryChart(categories) {
     const ctx = document.getElementById('categoryChart');
     if (!ctx) return;
@@ -546,19 +680,24 @@ function updateCategoryChart(categories) {
         return;
     }
     
+    // Group categories into simplified groups
+    const groupedCategories = groupCategories(categories);
+    console.log('Grouped categories:', groupedCategories);
+    
+    // Create dynamic color assignment for simplified groups
+    const colorKeys = Object.keys(COLORS).filter(key => 
+        !['black', 'white', 'gray', 'darkGray'].includes(key)
+    );
+    
     const chartData = {
-        labels: categories.map(c => c.category.toUpperCase()),
+        labels: groupedCategories.map(c => c.groupName.toUpperCase()),
             datasets: [{
             label: 'Transaction Count',
-            data: categories.map(c => c.count),
-            backgroundColor: [
-                COLORS.yellow,
-                COLORS.pink,
-                COLORS.mint,
-                COLORS.purple,
-                COLORS.blue,
-                COLORS.orange
-            ],
+            data: groupedCategories.map(c => c.count),
+            backgroundColor: groupedCategories.map((_, index) => {
+                const colorKey = colorKeys[index % colorKeys.length];
+                return COLORS[colorKey];
+            }),
                 borderColor: COLORS.black,
                 borderWidth: BRUTALIST_CONFIG.borderWidth,
             offset: 8,
@@ -597,6 +736,7 @@ function updateCategoryChart(categories) {
                                     const value = dataset.data[i];
                                     const total = dataset.data.reduce((a, b) => a + b, 0);
                                     const percentage = ((value / total) * 100).toFixed(1);
+                                    const group = groupedCategories[i];
                                     return {
                                         text: `${label}: ${value} (${percentage}%)`,
                                         fillStyle: dataset.backgroundColor[i],
@@ -618,13 +758,13 @@ function updateCategoryChart(categories) {
                             const value = context.parsed;
                             const total = context.dataset.data.reduce((a, b) => a + b, 0);
                             const percentage = ((value / total) * 100).toFixed(1);
-                            const category = categories[context.dataIndex];
+                            const group = groupedCategories[context.dataIndex];
                             return [
-                                `${label}: ${value} transactions (${percentage}%)`,
-                                `Total Amount: ${formatCurrency(category.total_amount || 0)}`,
-                                `Avg Amount: ${formatCurrency(category.avg_amount || 0)}`,
-                                `Min: ${formatCurrency(category.min_amount || 0)}`,
-                                `Max: ${formatCurrency(category.max_amount || 0)}`
+                                `Category Group: ${label}`,
+                                `Transactions: ${value} (${percentage}%)`,
+                                `Total Amount: ${formatCurrency(group.total_amount || 0)}`,
+                                `Avg Amount: ${formatCurrency(group.avg_amount || 0)}`,
+                                `Includes: ${group.subCategories.join(', ')}`
                             ];
                         }
                     },
@@ -994,6 +1134,171 @@ function getBrutalistTooltipConfig() {
     };
 }
 
+
+// Transaction Types by Amount Donut Chart with Brutalist Styling
+function updateTransactionTypesChart(transactionTypesData) {
+    const ctx = document.getElementById('transactionTypesChart');
+    if (!ctx) return;
+    
+    console.log('Transaction types chart data:', transactionTypesData);
+    
+    // Handle empty data
+    if (!transactionTypesData || transactionTypesData.length === 0) {
+        if (charts.transactionTypes) charts.transactionTypes.destroy();
+        return;
+    }
+    
+    // Filter to only show the specific transaction types requested
+    const requestedTypes = ['DEPOSIT', 'TRANSFER', 'PAYMENT', 'RECEIVE', 'AIRTIME', 'DATA_BUNDLE', 'PURCHASE'];
+    const filteredData = transactionTypesData.filter(item => 
+        requestedTypes.includes(item.transaction_type)
+    );
+    
+    // Check for missing transaction types
+    const availableTypes = transactionTypesData.map(item => item.transaction_type);
+    const missingTypes = requestedTypes.filter(type => !availableTypes.includes(type));
+    
+    // If no data matches, show all available types
+    const dataToShow = filteredData.length > 0 ? filteredData : transactionTypesData;
+    
+    // Log missing types for debugging
+    if (missingTypes.length > 0) {
+        console.log('Missing transaction types in database:', missingTypes);
+        console.log('Available transaction types:', availableTypes);
+    }
+    
+    // Create dynamic color assignment
+    const colorKeys = Object.keys(COLORS).filter(key => 
+        !['black', 'white', 'gray', 'darkGray'].includes(key)
+    );
+    
+    const chartData = {
+        labels: dataToShow.map(t => t.transaction_type.toUpperCase()),
+        datasets: [{
+            label: 'Total Amount (RWF)',
+            data: dataToShow.map(t => t.total_amount),
+            backgroundColor: dataToShow.map((item, index) => {
+                const colorKey = colorKeys[index % colorKeys.length];
+                // Make small values slightly more vibrant for visibility
+                const isSmallValue = item.total_amount < 50000;
+                return isSmallValue ? COLORS[colorKey] : COLORS[colorKey];
+            }),
+            borderColor: dataToShow.map((item, index) => {
+                // Add thicker border for small values to make them more visible
+                const isSmallValue = item.total_amount < 50000;
+                return isSmallValue ? COLORS.black : COLORS.black;
+            }),
+            borderWidth: dataToShow.map(item => item.total_amount < 50000 ? 3 : 2),
+            borderRadius: 4, // Slightly rounded corners for elegance
+            borderSkipped: false
+        }]
+    };
+    
+    if (charts.transactionTypes) charts.transactionTypes.destroy();
+    
+    charts.transactionTypes = new Chart(ctx, {
+        type: 'bar',
+        data: chartData,
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            indexAxis: 'y', // Horizontal bar chart
+            layout: {
+                padding: {
+                    left: 20,
+                    right: 20,
+                    top: 20,
+                    bottom: 20
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false // Hide legend since values are on the bars
+                },
+                tooltip: {
+                    callbacks: {
+                        title: function(context) {
+                            return context[0].label.toUpperCase();
+                        },
+                        label: function(context) {
+                            const label = context.label || '';
+                            const value = context.parsed.x; // x-axis for horizontal bars
+                            const typeData = dataToShow[context.dataIndex];
+                            const total = dataToShow.reduce((sum, t) => sum + t.total_amount, 0);
+                            const percentage = ((value / total) * 100).toFixed(1);
+                            
+                            return [
+                                `Transaction Type: ${label}`,
+                                `Total Amount: ${formatCurrency(value)} (${percentage}%)`,
+                                `Transaction Count: ${typeData.count}`,
+                                `Average Amount: ${formatCurrency(typeData.avg_amount)}`
+                            ];
+                        }
+                    },
+                    backgroundColor: COLORS.white,
+                    titleColor: COLORS.black,
+                    bodyColor: COLORS.black,
+                    borderColor: COLORS.black,
+                    borderWidth: 2,
+                    titleFont: {
+                        family: BRUTALIST_CONFIG.fontFamily,
+                        weight: BRUTALIST_CONFIG.fontWeight,
+                        size: 14
+                    },
+                    bodyFont: {
+                        family: BRUTALIST_CONFIG.fontFamily,
+                        weight: BRUTALIST_CONFIG.fontWeight,
+                        size: 12
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    beginAtZero: true,
+                    suggestedMin: 0,
+                    suggestedMax: undefined, // Let Chart.js auto-scale
+                    grid: {
+                        color: COLORS.gray,
+                        lineWidth: 1,
+                        drawBorder: true,
+                        borderColor: COLORS.black,
+                        borderWidth: 2
+                    },
+                    ticks: {
+                        font: {
+                            family: BRUTALIST_CONFIG.fontFamily,
+                            weight: BRUTALIST_CONFIG.fontWeight,
+                            size: 12
+                        },
+                        color: COLORS.black,
+                        callback: function(value) {
+                            return formatCurrency(value);
+                        },
+                        maxTicksLimit: 8 // Limit number of ticks for cleaner look
+                    }
+                },
+                y: {
+                    grid: {
+                        display: false
+                    },
+                    ticks: {
+                        font: {
+                            family: BRUTALIST_CONFIG.fontFamily,
+                            weight: BRUTALIST_CONFIG.fontWeight,
+                            size: 12
+                        },
+                        color: COLORS.black,
+                        textTransform: BRUTALIST_CONFIG.textTransform
+                    },
+                    categoryPercentage: 0.6, // More spacing between bars
+                    barPercentage: 0.7, // Thinner bars for less chunkiness
+                    minBarLength: 20 // Ensure minimum bar length for visibility
+                }
+            }
+        }
+    });
+}
+
 // Get tooltip configuration (legacy)
 function getTooltipConfig() {
     return getBrutalistTooltipConfig();
@@ -1007,15 +1312,18 @@ function updateTransactionsTable(data) {
 
     if (!tbody) return;
     
+    // Use filtered data if available, otherwise use allTransactions
+    const sourceData = data || filteredTransactions.length > 0 ? filteredTransactions : allTransactions;
+    
     // Calculate pagination
     const startIndex = (currentPage - 1) * pageSize;
-    const endIndex = Math.min(startIndex + pageSize, allTransactions.length);
-    const transactionsToShow = allTransactions.slice(startIndex, endIndex);
+    const endIndex = Math.min(startIndex + pageSize, sourceData.length);
+    const transactionsToShow = sourceData.slice(startIndex, endIndex);
     
-    if (allTransactions.length === 0) {
+    if (sourceData.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="9" class="nb-text-center">
+                <td colspan="6" class="nb-text-center">
                     <div class="empty-state">
                         <div class="empty-state-icon">📊</div>
                         <p>No transaction data available</p>
@@ -1039,12 +1347,9 @@ function updateTransactionsTable(data) {
         row.style.animationDelay = `${index * 0.05}s`;
         row.innerHTML = `
             <td>${formatDate(t.date)}</td>
-            <td><span class="type-badge type-${(t.type || 'unknown').toLowerCase()}">${t.type || 'Unknown'}</span></td>
+            <td><span class="type-badge type-${(t.transaction_type || t.type || 'unknown').toLowerCase()}">${t.transaction_type || t.type || 'Unknown'}</span></td>
             <td class="formatted-number">${formatCurrency(t.amount)}</td>
-            <td>${formatPhone(t.phone)}</td>
-            <td>${t.reference || 'N/A'}</td>
-            <td>${t.recipient_name || 'N/A'}</td>
-            <td>${t.personal_id || 'N/A'}</td>
+            <td><span class="direction-badge direction-${(t.direction || 'unknown').toLowerCase()}">${t.direction || 'Unknown'}</span></td>
             <td><span class="status-badge status-${(t.status || 'unknown').toLowerCase()}">${t.status || 'Unknown'}</span></td>
             <td><button class="view-btn" onclick="viewTransactionDetails('${t.id || (startIndex + index)}')">VIEW</button></td>
         `;
@@ -1052,9 +1357,9 @@ function updateTransactionsTable(data) {
     });
 
     // Update table info
-    const startItem = allTransactions.length > 0 ? startIndex + 1 : 0;
+    const startItem = sourceData.length > 0 ? startIndex + 1 : 0;
     const endItem = endIndex;
-    tableInfo.innerHTML = `<span>Showing ${startItem}-${endItem} of ${allTransactions.length} total transactions</span>`;
+    tableInfo.innerHTML = `<span>Showing ${startItem}-${endItem} of ${sourceData.length} total transactions</span>`;
     
     // Update pagination controls
     updatePaginationControls();
@@ -1079,7 +1384,8 @@ function handlePageSizeChange() {
     if (pageSizeSelect) {
         pageSize = parseInt(pageSizeSelect.value);
         currentPage = 1;
-        totalPages = Math.ceil(allTransactions.length / pageSize);
+        const sourceData = filteredTransactions.length > 0 ? filteredTransactions : allTransactions;
+        totalPages = Math.ceil(sourceData.length / pageSize);
         updateTransactionsTable();
     }
 }
@@ -1093,6 +1399,10 @@ function updatePaginationControls() {
     const pageNumbers = document.getElementById('pageNumbers');
     
     if (!paginationControls) return;
+    
+    // Calculate total pages based on current data source
+    const sourceData = filteredTransactions.length > 0 ? filteredTransactions : allTransactions;
+    totalPages = Math.ceil(sourceData.length / pageSize);
     
     // Show pagination controls if there are multiple pages
     if (totalPages > 1) {
@@ -1194,6 +1504,33 @@ function formatCurrency(amount) {
     }).format(amount || 0);
 }
 
+function formatCategory(category) {
+    if (!category) return 'Unknown';
+    
+    // Convert category codes to readable names
+    const categoryMap = {
+        'TRANSFER_INCOMING': 'Transfer In',
+        'TRANSFER_OUTGOING': 'Transfer Out',
+        'PAYMENT_PERSONAL': 'Payment Personal',
+        'PAYMENT_BUSINESS': 'Payment Business',
+        'DEPOSIT_AGENT': 'Deposit Agent',
+        'DEPOSIT_CASH': 'Deposit Cash',
+        'DEPOSIT_BANK_TRANSFER': 'Deposit Bank',
+        'DEPOSIT_OTHER': 'Deposit Other',
+        'AIRTIME': 'Airtime',
+        'DATA_BUNDLE': 'Data Bundle',
+        'DEPOSIT': 'Deposit',
+        'WITHDRAWAL': 'Withdrawal',
+        'TRANSFER': 'Transfer',
+        'PAYMENT': 'Payment',
+        'QUERY': 'Query',
+        'OTHER': 'Other',
+        'UNKNOWN': 'Unknown'
+    };
+    
+    return categoryMap[category] || category.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+}
+
 function formatNumber(num) {
     return (num || 0).toLocaleString();
 }
@@ -1224,13 +1561,9 @@ function formatPhone(phone) {
     // Normalize phone number to Rwanda format (+250)
     let normalizedPhone = phone;
     
-    // If it starts with +256, convert to +250 (Rwanda)
-    if (normalizedPhone.startsWith('+256')) {
-        normalizedPhone = '+250' + normalizedPhone.substring(4);
-    }
-    // If it starts with 256, add +250
-    else if (normalizedPhone.startsWith('256')) {
-        normalizedPhone = '+250' + normalizedPhone.substring(3);
+    // If it starts with +250, keep as Rwanda format
+    if (normalizedPhone.startsWith('+250')) {
+        // Already in correct format
     }
     // If it starts with 250, add +
     else if (normalizedPhone.startsWith('250')) {
@@ -1274,7 +1607,7 @@ if (typeof module !== 'undefined' && module.exports) {
     };
 }
 
-// View transaction details
+// View transaction details - optimized to only show relevant information
 function viewTransactionDetails(transactionId) {
     let transaction;
     
@@ -1296,216 +1629,364 @@ function viewTransactionDetails(transactionId) {
         return;
     }
     
-    // Create modal or detailed view
+    // Determine transaction type and create appropriate view
+    const transactionType = (transaction.transaction_type || transaction.type || 'unknown').toUpperCase();
+    const category = transaction.category || 'unknown';
+    
+    // Create modal with consistent NeoBrutalism styling
     const modal = document.createElement('div');
     modal.className = 'transaction-modal';
-    modal.innerHTML = `
+    
+    // Build content dynamically based on available data
+    let content = `
         <div class="modal-content">
             <div class="modal-header">
-                <h3>Transaction Details</h3>
+                <h3>${getTransactionIcon(transactionType)} ${getTransactionTitle(transactionType)}</h3>
                 <button class="close-btn" onclick="this.closest('.transaction-modal').remove()">×</button>
             </div>
             <div class="modal-body">
                 <div class="detail-grid">
+                    <!-- Transaction Type & Category -->
+                    <div class="detail-item full-width highlight">
+                        <label>Transaction Type:</label>
+                        <span class="category-badge category-${category.toLowerCase().replace('_', '-')}">${formatCategory(category)}</span>
+                    </div>
+                    
+                    <!-- Amount (always shown) -->
                     <div class="detail-item">
-                        <label>ID:</label>
-                        <span>${transaction.id || 'N/A'}</span>
-                </div>
+                        <label>Amount:</label>
+                        <span class="formatted-number large-amount ${transactionType === 'RECEIVE' ? 'positive' : ''}">${formatCurrency(transaction.amount)}</span>
+                    </div>`;
+    
+    // Only show fee if it exists and is greater than 0
+    if (transaction.fee && transaction.fee > 0) {
+        content += `
+                    <div class="detail-item">
+                        <label>Fee:</label>
+                        <span class="formatted-number">${formatCurrency(transaction.fee)}</span>
+                    </div>`;
+    }
+    
+    // Only show new balance if available
+    if (transaction.new_balance) {
+        content += `
+                    <div class="detail-item">
+                        <label>New Balance:</label>
+                        <span class="formatted-number">${formatCurrency(transaction.new_balance)}</span>
+                    </div>`;
+    }
+    
+    // Show relevant party information based on transaction type
+    if (transactionType === 'DEPOSIT') {
+        // For deposits, show agent info if available
+        if (transaction.agent_momo_number) {
+            content += `
+                    <div class="detail-item">
+                        <label>Agent Momo Number:</label>
+                        <span>${formatPhone(transaction.agent_momo_number)}</span>
+                    </div>`;
+        }
+    } else if (transactionType === 'TRANSFER' || transactionType === 'RECEIVE') {
+        // For transfers, show sender/recipient info
+        if (transaction.sender_name) {
+            content += `
+                    <div class="detail-item">
+                        <label>Sender Name:</label>
+                        <span class="sender-name">${transaction.sender_name}</span>
+                    </div>`;
+        }
+        if (transaction.sender_phone) {
+            content += `
+                    <div class="detail-item">
+                        <label>Sender Phone:</label>
+                        <span>${formatPhone(transaction.sender_phone)}</span>
+                    </div>`;
+        }
+        if (transaction.recipient_name) {
+            content += `
+                    <div class="detail-item">
+                        <label>Recipient Name:</label>
+                        <span>${transaction.recipient_name}</span>
+                    </div>`;
+        }
+        if (transaction.recipient_phone) {
+            content += `
+                    <div class="detail-item">
+                        <label>Recipient Phone:</label>
+                        <span>${formatPhone(transaction.recipient_phone)}</span>
+                    </div>`;
+        }
+        if (transaction.momo_code) {
+            content += `
+                    <div class="detail-item">
+                        <label>Momo Code:</label>
+                        <span>${transaction.momo_code}</span>
+                    </div>`;
+        }
+    } else if (transactionType === 'PAYMENT') {
+        // For payments, show business info if available
+        if (transaction.business_name) {
+            content += `
+                    <div class="detail-item full-width">
+                        <label>Business Name:</label>
+                        <span class="business-name">${transaction.business_name}</span>
+                    </div>`;
+        }
+        if (transaction.recipient_name) {
+            content += `
+                    <div class="detail-item">
+                        <label>Recipient Name:</label>
+                        <span>${transaction.recipient_name}</span>
+                    </div>`;
+        }
+        if (transaction.momo_code) {
+            content += `
+                    <div class="detail-item">
+                        <label>Momo Code:</label>
+                        <span>${transaction.momo_code}</span>
+                    </div>`;
+        }
+    }
+    
+    // Show transaction IDs based on transaction type and available data
+    const ids = [];
+    const seenValues = new Set();
+    
+    // For payment transactions, show the appropriate ID based on what's available
+    if (transactionType === 'PAYMENT') {
+        // For payments, prioritize the actual transaction ID from the message
+        if (transaction.transaction_id) {
+            ids.push({ label: 'Transaction ID', value: transaction.transaction_id });
+            seenValues.add(transaction.transaction_id);
+        }
+        if (transaction.financial_transaction_id && !seenValues.has(transaction.financial_transaction_id)) {
+            ids.push({ label: 'Financial ID', value: transaction.financial_transaction_id });
+            seenValues.add(transaction.financial_transaction_id);
+        }
+        if (transaction.external_transaction_id && !seenValues.has(transaction.external_transaction_id)) {
+            ids.push({ label: 'External ID', value: transaction.external_transaction_id });
+            seenValues.add(transaction.external_transaction_id);
+        }
+    } else {
+        // For other transaction types, show all available IDs
+        if (transaction.id) ids.push({ label: 'Transaction ID', value: transaction.id });
+        if (transaction.external_transaction_id) ids.push({ label: 'External ID', value: transaction.external_transaction_id });
+        if (transaction.financial_transaction_id) ids.push({ label: 'Financial ID', value: transaction.financial_transaction_id });
+        
+        // Remove duplicates
+        const uniqueIds = [];
+        for (const id of ids) {
+            if (!seenValues.has(id.value)) {
+                uniqueIds.push(id);
+                seenValues.add(id.value);
+            }
+        }
+        ids.length = 0;
+        ids.push(...uniqueIds);
+    }
+    
+    // Display IDs
+    for (const id of ids) {
+        content += `
+                    <div class="detail-item">
+                        <label>${id.label}:</label>
+                        <span>${id.value}</span>
+                    </div>`;
+    }
+    
+    // Always show date
+    content += `
                     <div class="detail-item">
                         <label>Date:</label>
                         <span>${formatDate(transaction.date)}</span>
-                </div>
-                    <div class="detail-item">
-                        <label>Type:</label>
-                        <span class="type-badge type-${(transaction.type || 'unknown').toLowerCase()}">${transaction.type || 'Unknown'}</span>
-                </div>
-                    <div class="detail-item">
-                        <label>Amount:</label>
-                        <span class="formatted-number">${formatCurrency(transaction.amount)}</span>
-                </div>
-                    <div class="detail-item">
-                        <label>Phone:</label>
-                        <span>${formatPhone(transaction.phone)}</span>
-                </div>
-                    <div class="detail-item">
-                        <label>Reference:</label>
-                        <span>${transaction.reference || 'N/A'}</span>
-                </div>
-                    <div class="detail-item">
-                        <label>Recipient Name:</label>
-                        <span>${transaction.recipient_name || (['DEPOSIT', 'WITHDRAWAL', 'Purchase', 'Airtime', 'Cash Out'].includes(transaction.type) ? 'Self' : 'N/A')}</span>
-                </div>
-                    <div class="detail-item">
-                        <label>Personal ID:</label>
-                        <span>${transaction.personal_id || (['DEPOSIT', 'WITHDRAWAL', 'Purchase', 'Airtime', 'Cash Out'].includes(transaction.type) ? 'Self' : 'N/A')}</span>
-                </div>
+                    </div>`;
+    
+    // Only show status if available
+    if (transaction.status) {
+        content += `
                     <div class="detail-item">
                         <label>Status:</label>
-                        <span class="status-badge status-${(transaction.status || 'unknown').toLowerCase()}">${transaction.status || 'Unknown'}</span>
-                </div>
-                    ${transaction.type === 'DEPOSIT' ? `
+                        <span class="status-badge status-${transaction.status.toLowerCase()}">${transaction.status}</span>
+                    </div>`;
+    }
+    
+    // Only show confidence score if available
+    if (transaction.confidence_score) {
+        content += `
+                    <div class="detail-item">
+                        <label>Confidence Score:</label>
+                        <span>${(transaction.confidence_score * 100).toFixed(1)}%</span>
+                    </div>`;
+    }
+    
+    // Only show reference if available and not duplicate of an ID
+    // For payment transactions, reference is usually the same as transaction_id, so skip it
+    if (transaction.reference && !seenValues.has(transaction.reference) && transactionType !== 'PAYMENT') {
+        content += `
+                    <div class="detail-item">
+                        <label>Reference:</label>
+                        <span>${transaction.reference}</span>
+                    </div>`;
+    }
+    
+    // Always show original message if available (check multiple possible field names)
+    // Handle empty strings, null, undefined, and "null" string values properly
+    const getValidMessage = (field) => {
+        if (!field || field === 'null' || field === null || field === undefined) return null;
+        const trimmed = field.trim();
+        return trimmed.length > 0 ? trimmed : null;
+    };
+    
+    const originalMessage = getValidMessage(transaction.original_message) || 
+                           getValidMessage(transaction.original_data) || 
+                           getValidMessage(transaction.raw_data) || 
+                           getValidMessage(transaction.raw_sms_data);
+    
+    // Debug: Log available fields for troubleshooting
+    console.log('Transaction fields for original message:', {
+        original_message: transaction.original_message,
+        original_data: transaction.original_data,
+        raw_data: transaction.raw_data,
+        raw_sms_data: transaction.raw_sms_data,
+        original_message_length: transaction.original_message ? transaction.original_message.length : 0,
+        original_data_length: transaction.original_data ? transaction.original_data.length : 0,
+        raw_data_length: transaction.raw_data ? transaction.raw_data.length : 0,
+        found: !!originalMessage
+    });
+    
+    if (originalMessage) {
+        content += `
                     <div class="detail-item full-width">
-                        <label>Transaction Description:</label>
-                        <span>Money deposited into your account by Self</span>
-                    </div>
-                    ` : ''}
-                    ${transaction.type === 'WITHDRAWAL' ? `
+                        <label>Original Message:</label>
+                        <textarea readonly class="original-message">${originalMessage}</textarea>
+                    </div>`;
+    } else {
+        // Show debug info if no original message found
+        content += `
                     <div class="detail-item full-width">
-                        <label>Transaction Description:</label>
-                        <span>Money withdrawn from your account by Self</span>
-                    </div>
-                    ` : ''}
-                    ${transaction.type === 'PAYMENT' ? `
-                    <div class="detail-item full-width">
-                        <label>Transaction Description:</label>
-                        <span>Payment sent to ${transaction.recipient_name || 'recipient'}</span>
-                    </div>
-                    ` : ''}
-                    ${transaction.type === 'Purchase' && transaction.category === 'Data Bundle' ? `
-                    <div class="detail-item full-width">
-                        <label>Transaction Description:</label>
-                        <span>Data bundle purchase for internet access</span>
-                    </div>
-                    ` : ''}
-                    ${transaction.type === 'Airtime' ? `
-                    <div class="detail-item full-width">
-                        <label>Transaction Description:</label>
-                        <span>Airtime purchase for ${transaction.phone || 'phone number'}</span>
-                    </div>
-                    ` : ''}
-                    ${transaction.type === 'Send' ? `
-                    <div class="detail-item full-width">
-                        <label>Transaction Description:</label>
-                        <span>Money sent to ${transaction.recipient_name || 'recipient'}</span>
-                    </div>
-                    ` : ''}
-                    ${transaction.type === 'Receive' ? `
-                    <div class="detail-item full-width">
-                        <label>Transaction Description:</label>
-                        <span>Money received from ${transaction.recipient_name || 'sender'}</span>
-                    </div>
-                    ` : ''}
-                    ${transaction.type === 'Cash Out' ? `
-                    <div class="detail-item full-width">
-                        <label>Transaction Description:</label>
-                        <span>Cash withdrawn from account</span>
-                    </div>
-                    ` : ''}
-                    ${transaction.raw_data ? `
-                    <div class="detail-item full-width">
-                        <label>Original SMS Data:</label>
-                        <textarea readonly>${transaction.raw_data}</textarea>
-                </div>
-                    ` : ''}
-                    ${transaction.xml_attributes ? `
-                    <div class="detail-item full-width">
-                        <label>XML Attributes:</label>
-                        <textarea readonly>${JSON.stringify(transaction.xml_attributes, null, 2)}</textarea>
-                    </div>
-                    ` : ''}
+                        <label>Debug Info:</label>
+                        <span style="font-size: 0.8rem; color: #666;">
+                            No original message found. Field values:<br/>
+                            original_message: "${transaction.original_message}" (type: ${typeof transaction.original_message})<br/>
+                            original_data: "${transaction.original_data}" (type: ${typeof transaction.original_data})<br/>
+                            raw_data: "${transaction.raw_data}" (type: ${typeof transaction.raw_data})<br/>
+                            raw_sms_data: "${transaction.raw_sms_data}" (type: ${typeof transaction.raw_sms_data})
+                        </span>
+                    </div>`;
+    }
+    
+    content += `
                 </div>
             </div>
         </div>
     `;
     
-    // Add modal styles
-    const style = document.createElement('style');
-    style.textContent = `
-        .transaction-modal {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.8);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-        }
-        .modal-content {
-            background: white;
-            border: 6px solid black;
-            border-radius: 0;
-            max-width: 800px;
-            width: 90%;
-            max-height: 80vh;
-            overflow-y: auto;
-            box-shadow: 12px 12px 0 rgba(0,0,0,1);
-        }
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 1.5rem;
-            border-bottom: 6px solid black;
-            background: var(--brutal-yellow);
-            font-family: 'Lexend Mega', sans-serif;
-        }
-        .modal-header h3 {
-            margin: 0;
-            font-size: 1.5rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            color: var(--brutal-black);
-        }
-        .modal-body {
-            padding: 1.5rem;
-        }
-        .detail-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1rem;
-        }
-        .detail-item.full-width {
-            grid-column: 1 / -1;
-        }
-        .detail-item label {
-            font-weight: 700;
-            text-transform: uppercase;
-            color: var(--brutal-black);
-            font-family: 'Lexend Mega', sans-serif;
-            display: block;
-            margin-bottom: 0.5rem;
-        }
-        .detail-item span {
-            display: block;
-            padding: 0.5rem;
-            background: var(--brutal-gray);
-            border: 2px solid var(--brutal-black);
-            font-weight: 600;
-        }
-        .detail-item textarea {
-            width: 100%;
-            height: 120px;
-            border: 3px solid var(--brutal-black);
-            padding: 0.75rem;
-            font-family: monospace;
-            font-size: 0.8rem;
-            background: var(--brutal-white);
-            resize: vertical;
-        }
-        .close-btn {
-            background: var(--brutal-pink);
-            color: var(--brutal-white);
-            border: 3px solid var(--brutal-black);
-            font-size: 1.5rem;
-            font-weight: 700;
-            cursor: pointer;
-            padding: 0.5rem 0.75rem;
-            box-shadow: 4px 4px 0 rgba(0,0,0,1);
-            transition: all 0.2s ease;
-        }
-        .close-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 6px 6px 0 rgba(0,0,0,1);
-        }
-        .close-btn:active {
-            transform: translateY(0);
-            box-shadow: 2px 2px 0 rgba(0,0,0,1);
-        }
-    `;
-    
-    document.head.appendChild(style);
+    modal.innerHTML = content;
     document.body.appendChild(modal);
 }
+
+// Helper functions for transaction display
+function getTransactionIcon(type) {
+    const icons = {
+        'DEPOSIT': '💰',
+        'TRANSFER': '🔄',
+        'PAYMENT': '💳',
+        'RECEIVE': '📥',
+        'AIRTIME': '📱',
+        'DATA_BUNDLE': '📶',
+        'PURCHASE': '🛒'
+    };
+    return icons[type] || '📋';
+}
+
+function getTransactionTitle(type) {
+    const titles = {
+        'DEPOSIT': 'Deposit Transaction',
+        'TRANSFER': 'Transfer Transaction',
+        'PAYMENT': 'Payment Transaction',
+        'RECEIVE': 'Money Received',
+        'AIRTIME': 'Airtime Purchase',
+        'DATA_BUNDLE': 'Data Bundle Purchase',
+        'PURCHASE': 'Purchase Transaction'
+    };
+    return titles[type] || 'Transaction Details';
+}
+
+// ========================================
+// FILTER FUNCTIONALITY
+// ========================================
+
+function initializeFilters() {
+    // Initialize filtered transactions with all transactions
+    filteredTransactions = [...allTransactions];
+    
+    // Add event listeners for minimal filters
+    document.getElementById('clearFilters').addEventListener('click', clearFilters);
+    document.getElementById('searchFilter').addEventListener('input', debounce(applyFilters, 300));
+    document.getElementById('typeFilter').addEventListener('change', applyFilters);
+}
+
+function applyFilters() {
+    const typeFilter = document.getElementById('typeFilter').value;
+    const searchFilter = document.getElementById('searchFilter').value.toLowerCase();
+    
+    // Filter transactions
+    filteredTransactions = allTransactions.filter(transaction => {
+        // Type filter
+        if (typeFilter && transaction.transaction_type !== typeFilter && transaction.type !== typeFilter) {
+            return false;
+        }
+        
+        // Search filter
+        if (searchFilter) {
+            const searchableText = [
+                transaction.transaction_type || transaction.type || '',
+                transaction.category || '',
+                transaction.sender_name || '',
+                transaction.recipient_name || '',
+                transaction.sender_phone || '',
+                transaction.recipient_phone || '',
+                transaction.reference || '',
+                transaction.status || ''
+            ].join(' ').toLowerCase();
+            
+            if (!searchableText.includes(searchFilter)) {
+                return false;
+            }
+        }
+        
+        return true;
+    });
+    
+    // Reset to first page
+    currentPage = 1;
+    
+    // Update table
+    updateTransactionsTable(filteredTransactions);
+}
+
+function clearFilters() {
+    // Clear filter inputs
+    document.getElementById('typeFilter').value = '';
+    document.getElementById('searchFilter').value = '';
+    
+    // Reset filters
+    filteredTransactions = [...allTransactions];
+    currentPage = 1;
+    
+    // Update table
+    updateTransactionsTable(filteredTransactions);
+}
+
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+

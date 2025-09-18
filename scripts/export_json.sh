@@ -132,7 +132,7 @@ python3 -c "
 import sys
 sys.path.append('.')
 
-from etl.load_db import DatabaseLoader
+from etl.loader import DatabaseLoader
 import json
 from datetime import datetime
 

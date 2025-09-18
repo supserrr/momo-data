@@ -1,0 +1,747 @@
+{
+  "schemas": {
+    "transaction": {
+      "description": "Complete transaction schema with enhanced parser fields",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "description": "Transaction ID"
+        },
+        "amount": {
+          "type": "number",
+          "description": "Transaction amount",
+          "minimum": 0
+        },
+        "phone": {
+          "type": "string",
+          "description": "Phone number",
+          "pattern": "^\\+?[1-9]\\d{1,14}$"
+        },
+        "date": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Transaction date (ISO format)"
+        },
+        "reference": {
+          "type": "string",
+          "description": "Transaction reference number"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["DEPOSIT", "WITHDRAWAL", "TRANSFER", "PAYMENT", "RECEIVE", "QUERY", "AIRTIME", "DATA_BUNDLE", "PURCHASE", "OTHER", "UNKNOWN"],
+          "description": "Transaction type"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["SUCCESS", "FAILED", "PENDING", "PROCESSING", "COMPLETED", "CANCELLED", "REJECTED", "UNKNOWN"],
+          "description": "Transaction status"
+        },
+        "category": {
+          "type": "string",
+          "enum": ["TRANSFER_INCOMING", "TRANSFER_OUTGOING", "PAYMENT_PERSONAL", "PAYMENT_BUSINESS", "DEPOSIT_AGENT", "DEPOSIT_CASH", "DEPOSIT_BANK_TRANSFER", "DEPOSIT_OTHER", "AIRTIME", "DATA_BUNDLE", "DEPOSIT", "WITHDRAWAL", "TRANSFER", "PAYMENT", "QUERY", "OTHER", "UNKNOWN"],
+          "description": "Transaction category"
+        },
+        "category_description": {
+          "type": "string",
+          "description": "Detailed description of the transaction category"
+        },
+        "category_confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Category confidence score"
+        },
+        "personal_id": {
+          "type": "string",
+          "description": "Personal transaction ID"
+        },
+        "transaction_type": {
+          "type": "string",
+          "description": "Enhanced transaction type"
+        },
+        "direction": {
+          "type": "string",
+          "enum": ["credit", "debit"],
+          "description": "Transaction direction"
+        },
+        "sender_name": {
+          "type": "string",
+          "description": "Sender name"
+        },
+        "sender_phone": {
+          "type": "string",
+          "description": "Sender phone number"
+        },
+        "recipient_name": {
+          "type": "string",
+          "description": "Recipient name"
+        },
+        "recipient_phone": {
+          "type": "string",
+          "description": "Recipient phone number"
+        },
+        "momo_code": {
+          "type": "string",
+          "description": "Momo code"
+        },
+        "sender_momo_id": {
+          "type": "string",
+          "description": "Sender momo ID"
+        },
+        "agent_momo_number": {
+          "type": "string",
+          "description": "Agent momo number"
+        },
+        "business_name": {
+          "type": "string",
+          "description": "Business name"
+        },
+        "new_balance": {
+          "type": "number",
+          "description": "New balance after transaction"
+        },
+        "confidence_score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Parser confidence score"
+        },
+        "financial_transaction_id": {
+          "type": "string",
+          "description": "Financial transaction ID"
+        },
+        "original_data": {
+          "type": "string",
+          "description": "Original raw data"
+        },
+        "original_message": {
+          "type": "string",
+          "description": "Original SMS message"
+        },
+        "raw_data": {
+          "type": "string",
+          "description": "Raw XML data"
+        },
+        "xml_tag": {
+          "type": "string",
+          "description": "XML tag name"
+        },
+        "xml_attributes": {
+          "type": "object",
+          "description": "XML attributes"
+        },
+        "cleaned_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Data cleaning timestamp"
+        },
+        "categorized_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Categorization timestamp"
+        },
+        "loaded_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Database loading timestamp"
+        }
+      },
+      "required": ["id", "amount"]
+    },
+    "user": {
+      "description": "User account schema",
+      "properties": {
+        "user_id": {
+          "type": "integer",
+          "description": "User ID"
+        },
+        "phone_number": {
+          "type": "string",
+          "pattern": "^\\+?[1-9]\\d{1,14}$",
+          "description": "Phone number"
+        },
+        "display_name": {
+          "type": "string",
+          "description": "Display name"
+        },
+        "account_status": {
+          "type": "string",
+          "enum": ["ACTIVE", "SUSPENDED", "CLOSED"],
+          "description": "Account status"
+        },
+        "registration_date": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Registration date"
+        },
+        "last_transaction_date": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last transaction date"
+        },
+        "total_transactions": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total number of transactions"
+        },
+        "total_amount_sent": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Total amount sent"
+        },
+        "total_amount_received": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Total amount received"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation timestamp"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last update timestamp"
+        },
+        "metadata": {
+          "type": "object",
+          "description": "Additional user metadata",
+          "properties": {
+            "account_type": {
+              "type": "string",
+              "enum": ["individual", "business", "agent"],
+              "description": "Account type"
+            },
+            "verification_status": {
+              "type": "string",
+              "enum": ["verified", "pending", "unverified"],
+              "description": "Verification status"
+            },
+            "risk_level": {
+              "type": "string",
+              "enum": ["low", "medium", "high"],
+              "description": "Risk level"
+            },
+            "preferred_language": {
+              "type": "string",
+              "description": "Preferred language"
+            }
+          }
+        }
+      },
+      "required": ["user_id", "phone_number"]
+    },
+    "transaction_category": {
+      "description": "Transaction category schema",
+      "properties": {
+        "category_id": {
+          "type": "integer",
+          "description": "Category ID"
+        },
+        "category_name": {
+          "type": "string",
+          "description": "Category name"
+        },
+        "category_code": {
+          "type": "string",
+          "description": "Category code"
+        },
+        "description": {
+          "type": "string",
+          "description": "Category description"
+        },
+        "is_active": {
+          "type": "boolean",
+          "description": "Whether category is active"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation timestamp"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last update timestamp"
+        },
+        "rules": {
+          "type": "object",
+          "description": "Category rules",
+          "properties": {
+            "keywords": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Keywords for categorization"
+            },
+            "amount_ranges": {
+              "type": "object",
+              "properties": {
+                "min": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "max": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              }
+            },
+            "fee_structure": {
+              "type": "object",
+              "properties": {
+                "percentage": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 100
+                },
+                "fixed_amount": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              }
+            }
+          }
+        },
+        "statistics": {
+          "type": "object",
+          "description": "Category statistics",
+          "properties": {
+            "total_transactions": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "total_amount": {
+              "type": "number",
+              "minimum": 0
+            },
+            "average_amount": {
+              "type": "number",
+              "minimum": 0
+            },
+            "success_rate": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            }
+          }
+        }
+      },
+      "required": ["category_id", "category_name", "category_code"]
+    },
+    "transaction_statistics": {
+      "description": "Transaction statistics schema",
+      "properties": {
+        "stat_id": {
+          "type": "integer",
+          "description": "Statistics ID"
+        },
+        "stat_type": {
+          "type": "string",
+          "enum": ["daily", "weekly", "monthly", "yearly"],
+          "description": "Statistics type"
+        },
+        "stat_period": {
+          "type": "string",
+          "description": "Statistics period"
+        },
+        "stat_date": {
+          "type": "string",
+          "format": "date",
+          "description": "Statistics date"
+        },
+        "category": {
+          "type": "object",
+          "description": "Category information",
+          "properties": {
+            "category_id": {
+              "type": "integer"
+            },
+            "category_name": {
+              "type": "string"
+            },
+            "category_code": {
+              "type": "string"
+            }
+          }
+        },
+        "user": {
+          "type": "object",
+          "description": "User information",
+          "properties": {
+            "user_id": {
+              "type": "integer"
+            },
+            "phone_number": {
+              "type": "string"
+            },
+            "display_name": {
+              "type": "string"
+            }
+          }
+        },
+        "transaction_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of transactions"
+        },
+        "total_amount": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Total amount"
+        },
+        "average_amount": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Average amount"
+        },
+        "min_amount": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Minimum amount"
+        },
+        "max_amount": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Maximum amount"
+        },
+        "success_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Success rate percentage"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation timestamp"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last update timestamp"
+        },
+        "breakdown": {
+          "type": "object",
+          "description": "Detailed breakdown",
+          "properties": {
+            "by_status": {
+              "type": "object",
+              "description": "Breakdown by status"
+            },
+            "by_hour": {
+              "type": "object",
+              "description": "Breakdown by hour"
+            },
+            "amount_distribution": {
+              "type": "object",
+              "description": "Amount distribution"
+            }
+          }
+        }
+      },
+      "required": ["stat_id", "stat_type", "stat_date", "transaction_count", "total_amount"]
+    },
+    "system_log": {
+      "description": "System log schema",
+      "properties": {
+        "log_id": {
+          "type": "integer",
+          "description": "Log ID"
+        },
+        "process_name": {
+          "type": "string",
+          "description": "Process name"
+        },
+        "log_level": {
+          "type": "string",
+          "enum": ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+          "description": "Log level"
+        },
+        "message": {
+          "type": "string",
+          "description": "Log message"
+        },
+        "details": {
+          "type": "object",
+          "description": "Additional log details",
+          "properties": {
+            "file_path": {
+              "type": "string"
+            },
+            "file_size_bytes": {
+              "type": "integer"
+            },
+            "parsing_method": {
+              "type": "string"
+            },
+            "validation_errors": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "performance_metrics": {
+              "type": "object",
+              "properties": {
+                "memory_usage_mb": {
+                  "type": "number"
+                },
+                "cpu_usage_percent": {
+                  "type": "number"
+                }
+              }
+            }
+          }
+        },
+        "records_processed": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of records processed"
+        },
+        "records_successful": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of successful records"
+        },
+        "records_failed": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of failed records"
+        },
+        "execution_time_seconds": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Execution time in seconds"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation timestamp"
+        },
+        "error_details": {
+          "type": "object",
+          "description": "Error details",
+          "properties": {
+            "failed_records": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "record_id": {
+                    "type": "string"
+                  },
+                  "error_type": {
+                    "type": "string"
+                  },
+                  "error_message": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "required": ["log_id", "process_name", "log_level", "message"]
+    },
+    "dashboard_data": {
+      "description": "Dashboard data schema",
+      "properties": {
+        "summary": {
+          "type": "object",
+          "description": "Transaction summary",
+          "properties": {
+            "total_transactions": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "total_amount": {
+              "type": "number",
+              "minimum": 0
+            },
+            "avg_amount": {
+              "type": "number",
+              "minimum": 0
+            },
+            "successful_transactions": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "failed_transactions": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "success_rate": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            }
+          },
+          "required": ["total_transactions", "total_amount", "avg_amount", "successful_transactions", "failed_transactions", "success_rate"]
+        },
+        "categories": {
+          "type": "array",
+          "description": "Category statistics",
+          "items": {
+            "type": "object",
+            "properties": {
+              "category": {
+                "type": "string"
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "total_amount": {
+                "type": "number",
+                "minimum": 0
+              },
+              "avg_amount": {
+                "type": "number",
+                "minimum": 0
+              },
+              "min_amount": {
+                "type": "number",
+                "minimum": 0
+              },
+              "max_amount": {
+                "type": "number",
+                "minimum": 0
+              },
+              "last_updated": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": ["category", "count", "total_amount", "avg_amount"]
+          }
+        },
+        "amount_distribution": {
+          "type": "array",
+          "description": "Amount distribution",
+          "items": {
+            "type": "object",
+            "properties": {
+              "amount_range": {
+                "type": "string"
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": ["amount_range", "count"]
+          }
+        },
+        "recent_transactions": {
+          "type": "array",
+          "description": "Recent transactions",
+          "items": {
+            "$ref": "#/schemas/transaction"
+          }
+        }
+      },
+      "required": ["summary", "categories", "amount_distribution", "recent_transactions"]
+    }
+  },
+  "examples": {
+    "transaction": {
+      "id": 1,
+      "amount": 2000.00,
+      "phone": "+250788110381",
+      "date": "2024-05-10T16:30:51Z",
+      "reference": "76662021700",
+      "type": "TRANSFER",
+      "status": "SUCCESS",
+      "category": "TRANSFER_INCOMING",
+      "category_description": "Money received from another person via mobile money transfer",
+      "category_confidence": 0.95,
+      "personal_id": "TXN001",
+      "transaction_type": "TRANSFER",
+      "direction": "credit",
+      "sender_name": "Jane Smith",
+      "sender_phone": "+250791666666",
+      "recipient_name": "Primary Account",
+      "recipient_phone": "+250788110381",
+      "momo_code": "12845",
+      "sender_momo_id": "*********013",
+      "agent_momo_number": null,
+      "business_name": null,
+      "new_balance": 2000.00,
+      "confidence_score": 0.95,
+      "financial_transaction_id": "76662021700",
+      "original_data": "You have received 2000 RWF from Jane Smith (*********013) on your mobile money account at 2024-05-10 16:30:51. Message from sender: . Your new balance:2000 RWF. Financial Transaction Id: 76662021700.",
+      "original_message": "You have received 2000 RWF from Jane Smith (*********013) on your mobile money account at 2024-05-10 16:30:51. Message from sender: . Your new balance:2000 RWF. Financial Transaction Id: 76662021700.",
+      "raw_data": "You have received 2000 RWF from Jane Smith (*********013) on your mobile money account at 2024-05-10 16:30:51. Message from sender: . Your new balance:2000 RWF. Financial Transaction Id: 76662021700.",
+      "xml_tag": "sms",
+      "xml_attributes": {
+        "protocol": "0",
+        "address": "M-Money",
+        "date": "1715351458724",
+        "type": "1",
+        "subject": "null",
+        "toa": "null",
+        "sc_toa": "null",
+        "service_center": "+250788110381",
+        "read": "1",
+        "status": "-1",
+        "locked": "0",
+        "date_sent": "1715351451000",
+        "sub_id": "6",
+        "readable_date": "10 May 2024 4:30:58 PM",
+        "contact_name": "(Unknown)"
+      },
+      "cleaned_at": "2024-05-10T16:31:05Z",
+      "categorized_at": "2024-05-10T16:31:10Z",
+      "loaded_at": "2024-05-10T16:31:15Z"
+    },
+    "user": {
+      "user_id": 1,
+      "phone_number": "+250788110381",
+      "display_name": "Primary Account",
+      "account_status": "ACTIVE",
+      "registration_date": "2024-01-01T00:00:00Z",
+      "last_transaction_date": "2024-05-21T14:38:14Z",
+      "total_transactions": 45,
+      "total_amount_sent": 125000.00,
+      "total_amount_received": 89000.00,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-05-21T14:38:14Z",
+      "metadata": {
+        "account_type": "individual",
+        "verification_status": "verified",
+        "risk_level": "low",
+        "preferred_language": "en"
+      }
+    },
+    "transaction_category": {
+      "category_id": 1,
+      "category_name": "Transfer Incoming",
+      "category_code": "TRANSFER_INCOMING",
+      "description": "Money received from another person via mobile money transfer. This includes peer-to-peer transfers where someone sends you money directly to your mobile wallet. Examples: receiving money from family, friends, or other individuals through their phone numbers or momo codes.",
+      "is_active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z",
+      "rules": {
+        "keywords": ["received", "from", "transfer", "incoming"],
+        "amount_ranges": {
+          "min": 100,
+          "max": 10000000
+        },
+        "fee_structure": {
+          "percentage": 0,
+          "fixed_amount": 0
+        }
+      },
+      "statistics": {
+        "total_transactions": 15,
+        "total_amount": 250000.00,
+        "average_amount": 16666.67,
+        "success_rate": 100.0
+      }
+    }
+  }
+}

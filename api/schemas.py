@@ -21,12 +21,23 @@ class TransactionStatus(str, Enum):
 
 class TransactionCategory(str, Enum):
     """Transaction category enumeration."""
+    # Enhanced categories from parser
+    TRANSFER_INCOMING = "TRANSFER_INCOMING"
+    TRANSFER_OUTGOING = "TRANSFER_OUTGOING"
+    PAYMENT_PERSONAL = "PAYMENT_PERSONAL"
+    PAYMENT_BUSINESS = "PAYMENT_BUSINESS"
+    DEPOSIT_AGENT = "DEPOSIT_AGENT"
+    DEPOSIT_CASH = "DEPOSIT_CASH"
+    DEPOSIT_BANK_TRANSFER = "DEPOSIT_BANK_TRANSFER"
+    DEPOSIT_OTHER = "DEPOSIT_OTHER"
+    AIRTIME = "AIRTIME"
+    DATA_BUNDLE = "DATA_BUNDLE"
+    # Legacy categories for backward compatibility
     DEPOSIT = "DEPOSIT"
     WITHDRAWAL = "WITHDRAWAL"
     TRANSFER = "TRANSFER"
     PAYMENT = "PAYMENT"
     QUERY = "QUERY"
-    AIRTIME = "AIRTIME"
     OTHER = "OTHER"
     UNKNOWN = "UNKNOWN"
 
@@ -36,8 +47,11 @@ class TransactionType(str, Enum):
     WITHDRAWAL = "WITHDRAWAL"
     TRANSFER = "TRANSFER"
     PAYMENT = "PAYMENT"
+    RECEIVE = "RECEIVE"
     QUERY = "QUERY"
     AIRTIME = "AIRTIME"
+    DATA_BUNDLE = "DATA_BUNDLE"
+    PURCHASE = "PURCHASE"
     OTHER = "OTHER"
     UNKNOWN = "UNKNOWN"
 
@@ -50,6 +64,7 @@ class TransactionBase(BaseModel):
     type: Optional[str] = Field(None, description="Transaction type")
     status: Optional[str] = Field(None, description="Transaction status")
     category: Optional[str] = Field(None, description="Transaction category")
+    category_description: Optional[str] = Field(None, description="Detailed description of the transaction category")
     category_confidence: Optional[float] = Field(None, description="Category confidence score", ge=0, le=1)
 
 class TransactionCreate(TransactionBase):
@@ -65,14 +80,32 @@ class TransactionUpdate(BaseModel):
     type: Optional[str] = Field(None, description="Transaction type")
     status: Optional[str] = Field(None, description="Transaction status")
     category: Optional[str] = Field(None, description="Transaction category")
+    category_description: Optional[str] = Field(None, description="Detailed description of the transaction category")
     category_confidence: Optional[float] = Field(None, description="Category confidence score", ge=0, le=1)
 
 class Transaction(TransactionBase):
     """Complete transaction model."""
     id: int = Field(..., description="Transaction ID")
     personal_id: Optional[str] = Field(None, description="Personal ID")
+    
+    # Enhanced parser fields
+    transaction_type: Optional[str] = Field(None, description="Transaction type")
+    direction: Optional[str] = Field(None, description="Transaction direction (credit/debit)")
+    sender_name: Optional[str] = Field(None, description="Sender name")
+    sender_phone: Optional[str] = Field(None, description="Sender phone number")
     recipient_name: Optional[str] = Field(None, description="Recipient name")
+    recipient_phone: Optional[str] = Field(None, description="Recipient phone number")
+    momo_code: Optional[str] = Field(None, description="Momo code")
+    sender_momo_id: Optional[str] = Field(None, description="Sender momo ID")
+    agent_momo_number: Optional[str] = Field(None, description="Agent momo number")
+    business_name: Optional[str] = Field(None, description="Business name")
+    new_balance: Optional[float] = Field(None, description="New balance after transaction")
+    confidence_score: Optional[float] = Field(None, description="Parser confidence score")
+    financial_transaction_id: Optional[str] = Field(None, description="Financial transaction ID")
+    
+    # Original data
     original_data: Optional[str] = Field(None, description="Original raw data")
+    original_message: Optional[str] = Field(None, description="Original SMS message")
     raw_data: Optional[str] = Field(None, description="Raw XML data")
     xml_tag: Optional[str] = Field(None, description="XML tag name")
     xml_attributes: Optional[Dict[str, Any]] = Field(None, description="XML attributes")
