@@ -1011,7 +1011,9 @@ h1, h2, h3, h4, h5, h6 {
 
 .status-failed {
     background: var(--brutal-pink);
-    color: var(--brutal-white);
+    color: var(--brutal-black);
+    text-decoration: line-through;
+    opacity: 0.9;
 }
 
 .status-pending {
@@ -1126,6 +1128,49 @@ h1, h2, h3, h4, h5, h6 {
 .category-unknown {
     background: var(--brutal-gray);
     color: var(--brutal-black);
+}
+
+/* Failed Transaction Category Colors - Same as successful but with strikethrough styling */
+.category-purchase-data-bundle-failed {
+    background: var(--brutal-purple);
+    color: var(--brutal-black);
+    text-decoration: line-through;
+    opacity: 0.8;
+}
+
+.category-purchase-airtime-failed {
+    background: var(--brutal-purple);
+    color: var(--brutal-black);
+    text-decoration: line-through;
+    opacity: 0.8;
+}
+
+.category-payment-business-failed {
+    background: var(--brutal-orange);
+    color: var(--brutal-black);
+    text-decoration: line-through;
+    opacity: 0.8;
+}
+
+.category-payment-utility-failed {
+    background: var(--brutal-orange);
+    color: var(--brutal-black);
+    text-decoration: line-through;
+    opacity: 0.8;
+}
+
+.category-payment-failed {
+    background: var(--brutal-orange);
+    color: var(--brutal-black);
+    text-decoration: line-through;
+    opacity: 0.8;
+}
+
+.category-transfer-failed {
+    background: var(--brutal-blue);
+    color: var(--brutal-black);
+    text-decoration: line-through;
+    opacity: 0.8;
 }
 
 /* Enhanced Category Badge Colors */
@@ -2278,10 +2323,12 @@ textarea:focus {
     border-radius: 0;
     max-width: 900px;
     width: 95%;
-    max-height: 85vh;
+    max-height: 90vh;
     overflow-y: auto;
     box-shadow: 12px 12px 0 rgba(0,0,0,1);
     animation: modalSlideIn 0.3s ease-out;
+    position: relative;
+    margin: 2rem;
 }
 
 @keyframes modalSlideIn {
@@ -2354,6 +2401,9 @@ textarea:focus {
     border: 2px solid var(--brutal-black);
     font-weight: 600;
     font-size: 0.95rem;
+    color: var(--brutal-black);
+    min-height: 1.5rem;
+    line-height: 1.4;
 }
 
 .detail-item .large-amount {
@@ -2499,6 +2549,125 @@ textarea:focus {
 .minimal-btn:active {
     transform: translateY(0);
     box-shadow: 1px 1px 0 rgba(0,0,0,1);
+}
+
+/* Responsive Design for Transaction Modal */
+@media (max-width: 768px) {
+    .modal-content {
+        width: 98%;
+        max-height: 95vh;
+        margin: 1rem;
+    }
+    
+    .detail-grid {
+        grid-template-columns: 1fr;
+        gap: 0.8rem;
+    }
+    
+    .modal-header {
+        padding: 1rem;
+    }
+    
+    .modal-header h3 {
+        font-size: 1.2rem;
+    }
+    
+    .modal-body {
+        padding: 1rem;
+    }
+    
+    .detail-item label {
+        font-size: 0.8rem;
+    }
+    
+    .detail-item span {
+        font-size: 0.9rem;
+        padding: 0.4rem;
+    }
+    
+    .detail-item .large-amount {
+        font-size: 1.1rem;
+    }
+    
+    .original-message {
+        font-size: 0.75rem;
+        min-height: 100px;
+    }
+}
+
+@media (max-width: 480px) {
+    .modal-content {
+        width: 100%;
+        height: 100vh;
+        max-height: 100vh;
+        margin: 0;
+        border-radius: 0;
+    }
+    
+    .modal-header h3 {
+        font-size: 1rem;
+    }
+    
+    .close-btn {
+        font-size: 1.2rem;
+        padding: 0.4rem 0.6rem;
+        min-width: 35px;
+        height: 35px;
+    }
+}
+
+/* Sortable Table Headers */
+.sortable {
+    cursor: pointer;
+    user-select: none;
+    position: relative;
+    transition: all 0.2s ease;
+    background: var(--brutal-yellow);
+    color: var(--brutal-black);
+    font-weight: 700;
+    text-transform: uppercase;
+    padding: 1rem;
+    border: 3px solid var(--brutal-black);
+}
+
+.sortable:hover {
+    background: var(--brutal-orange);
+    transform: translateY(-2px);
+    box-shadow: 4px 4px 0 rgba(0,0,0,1);
+}
+
+.sort-indicator {
+    display: inline-block;
+    margin-left: 0.5rem;
+    font-size: 0.8rem;
+    transition: all 0.2s ease;
+    opacity: 0.7;
+}
+
+.sortable:hover .sort-indicator {
+    opacity: 1;
+}
+
+.sort-indicator.asc {
+    transform: rotate(180deg);
+    opacity: 1;
+    color: var(--brutal-black);
+}
+
+.sort-indicator.desc {
+    transform: rotate(0deg);
+    opacity: 1;
+    color: var(--brutal-black);
+}
+
+.sortable.active {
+    background: var(--brutal-pink);
+    color: var(--brutal-black);
+}
+
+.sortable.active .sort-indicator {
+    opacity: 1;
+    color: var(--brutal-black);
 }
 
 /* Responsive Design for Minimal Filters */

@@ -1,6 +1,5 @@
 """
 Dashboard Router
-Team 11 - Enterprise Web Development
 """
 
 from fastapi import APIRouter, Depends, HTTPException

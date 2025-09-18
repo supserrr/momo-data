@@ -111,7 +111,7 @@ class MySQLDatabaseManager:
                 phone_pattern = f"%{phone}%"
                 params.extend([phone_pattern, phone_pattern])
             
-            query += " ORDER BY t.transaction_id DESC LIMIT %s OFFSET %s"
+            query += " ORDER BY t.transaction_date DESC LIMIT %s OFFSET %s"
             params.extend([limit, offset])
             
             cursor.execute(query, params)
@@ -235,8 +235,8 @@ class MySQLDatabaseManager:
             cursor.execute("""
                 SELECT 
                     COUNT(*) as total_transactions,
-                    SUM(amount) as total_amount,
-                    AVG(amount) as avg_amount,
+                    SUM(CASE WHEN status != 'FAILED' THEN amount ELSE 0 END) as total_amount,
+                    AVG(CASE WHEN status != 'FAILED' THEN amount ELSE NULL END) as avg_amount,
                     COUNT(CASE WHEN status = 'SUCCESS' THEN 1 END) as successful_transactions,
                     COUNT(CASE WHEN status = 'FAILED' THEN 1 END) as failed_transactions
                 FROM transactions
@@ -254,10 +254,10 @@ class MySQLDatabaseManager:
                 SELECT 
                     tc.category_name as category, 
                     COUNT(*) as count, 
-                    SUM(t.amount) as total_amount,
-                    AVG(t.amount) as avg_amount,
-                    MIN(t.amount) as min_amount,
-                    MAX(t.amount) as max_amount,
+                    SUM(CASE WHEN t.status != 'FAILED' THEN t.amount ELSE 0 END) as total_amount,
+                    AVG(CASE WHEN t.status != 'FAILED' THEN t.amount ELSE NULL END) as avg_amount,
+                    MIN(CASE WHEN t.status != 'FAILED' THEN t.amount ELSE NULL END) as min_amount,
+                    MAX(CASE WHEN t.status != 'FAILED' THEN t.amount ELSE NULL END) as max_amount,
                     NOW() as last_updated
                 FROM transactions t
                 LEFT JOIN transaction_categories tc ON t.category_id = tc.category_id
@@ -369,8 +369,8 @@ class MySQLDatabaseManager:
                 SELECT 
                     DATE_FORMAT(transaction_date, '%Y-%m') as month,
                     COUNT(*) as count,
-                    SUM(amount) as volume,
-                    AVG(amount) as avg_amount
+                    SUM(CASE WHEN status != 'FAILED' THEN amount ELSE 0 END) as volume,
+                    AVG(CASE WHEN status != 'FAILED' THEN amount ELSE NULL END) as avg_amount
                 FROM transactions
                 WHERE amount > 0
                 GROUP BY DATE_FORMAT(transaction_date, '%Y-%m')
@@ -388,7 +388,7 @@ class MySQLDatabaseManager:
                 SELECT 
                     HOUR(transaction_date) as hour,
                     COUNT(*) as count,
-                    SUM(amount) as volume
+                    SUM(CASE WHEN status != 'FAILED' THEN amount ELSE 0 END) as volume
                 FROM transactions
                 WHERE amount > 0
                 GROUP BY HOUR(transaction_date)
@@ -591,8 +591,8 @@ class MySQLDatabaseManager:
                 SELECT 
                     COALESCE(transaction_type, 'UNKNOWN') as transaction_type,
                     COUNT(*) as count,
-                    SUM(amount) as total_amount,
-                    AVG(amount) as avg_amount
+                    SUM(CASE WHEN status != 'FAILED' THEN amount ELSE 0 END) as total_amount,
+                    AVG(CASE WHEN status != 'FAILED' THEN amount ELSE NULL END) as avg_amount
                 FROM transactions
                 WHERE amount > 0
                 GROUP BY transaction_type

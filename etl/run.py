@@ -2,7 +2,6 @@
 """
 Enhanced ETL Pipeline for MTN MobileMoney SMS Data Processing
 Uses the new enhanced parser with detailed message type categorization
-Team 11 - Enterprise Web Development
 """
 
 import argparse
@@ -126,7 +125,7 @@ def convert_to_database_format(transactions: List[ParsedTransaction]) -> List[Di
             'type': transaction.transaction_type,
             'transaction_type': transaction.transaction_type,
             'direction': transaction.direction,
-            'status': 'SUCCESS',  # All parsed transactions are successful
+            'status': transaction.status,  # Use the status from parsed transaction
             'category': transaction.category,
             'category_confidence': transaction.confidence,
             'confidence': transaction.confidence,

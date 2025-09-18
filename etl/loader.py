@@ -1,6 +1,5 @@
 """
 MySQL Database Operations for MoMo Data
-Team 11 - Enterprise Web Development
 """
 
 import mysql.connector

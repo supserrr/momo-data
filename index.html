@@ -18,7 +18,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.2.1/dist/chart.umd.min.js"></script>
     
     <!-- Custom Styles for Chart Integration -->
-    <link rel="stylesheet" href="web/styles.css?v=1">
+    <link rel="stylesheet" href="web/styles.css?v=7">
     
     <style>
         :root {
@@ -284,11 +284,21 @@
                 <table class="nb-table" id="transactionsTable">
                     <thead>
                         <tr>
-                            <th>Date</th>
-                            <th>Type</th>
-                            <th>Amount</th>
-                            <th>Direction</th>
-                            <th>Status</th>
+                            <th class="sortable" data-sort="date" onclick="sortTable('date')">
+                                Date <span class="sort-indicator">↕</span>
+                            </th>
+                            <th class="sortable" data-sort="type" onclick="sortTable('type')">
+                                Type <span class="sort-indicator">↕</span>
+                            </th>
+                            <th class="sortable" data-sort="amount" onclick="sortTable('amount')">
+                                Amount <span class="sort-indicator">↕</span>
+                            </th>
+                            <th class="sortable" data-sort="direction" onclick="sortTable('direction')">
+                                Direction <span class="sort-indicator">↕</span>
+                            </th>
+                            <th class="sortable" data-sort="status" onclick="sortTable('status')">
+                                Status <span class="sort-indicator">↕</span>
+                            </th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -365,6 +375,6 @@
     </footer>
 
     <!-- Load Dashboard Data -->
-    <script src="web/chart_handler.js?v=12"></script>
+    <script src="web/chart_handler.js?v=23"></script>
 </body>
 </html>

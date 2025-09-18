@@ -1,7 +1,6 @@
 """
 Enhanced MTN MobileMoney Parser
 Based on detailed message type analysis
-Team 11 - Enterprise Web Development
 """
 
 import re
@@ -20,6 +19,7 @@ class ParsedTransaction:
     transaction_type: str = ""
     category: str = ""
     direction: str = ""  # "credit" or "debit"
+    status: str = "COMPLETED"  # "COMPLETED", "FAILED", "PENDING", etc.
     sender_name: Optional[str] = None
     sender_phone: Optional[str] = None
     recipient_name: Optional[str] = None
@@ -837,7 +837,7 @@ class EnhancedMTNParser:
             return None
     
     def _parse_failed_transaction(self, message: str, timestamp: Optional[str] = None) -> Optional[ParsedTransaction]:
-        """Parse failed transaction message."""
+        """Parse failed transaction message and categorize by intended purpose."""
         try:
             # Extract amount - handle both "AMOUNT" and "YOUR PAYMENT OF" formats
             amount_match = re.search(r'(?:AMOUNT|YOUR PAYMENT OF) ([\d,]+(?:\.\d{2})?) RWF', message.upper())
@@ -845,12 +845,29 @@ class EnhancedMTNParser:
                 return None
             amount = float(amount_match.group(1).replace(',', ''))
             
-            # Extract service name - handle both formats
-            service_match = re.search(r'(?:FOR ([^W]+) WITH|TO ([^(]+))', message.upper())
+            # Extract service name - improved patterns for failed transactions
             service_name = None
+            
+            # Pattern 1: "FOR [service] WITH" or "TO [service]" (but only if reasonable length)
+            service_match = re.search(r'(?:FOR ([^W]+) WITH|TO ([^(]+))', message.upper())
             if service_match:
-                service_name = service_match.group(1) or service_match.group(2)
-                service_name = service_name.strip() if service_name else None
+                candidate = service_match.group(1) or service_match.group(2)
+                candidate = candidate.strip() if candidate else None
+                # Only use this pattern if the result is reasonable (not too long)
+                if candidate and len(candidate) < 50:
+                    service_name = candidate
+            
+            # Pattern 2: "payment of X RWF to [service]" (for failed transactions)
+            if not service_name:
+                payment_match = re.search(r'YOUR PAYMENT OF \d+ RWF TO ([^H]+?)(?:\s+WITH TOKEN|\s+HAS FAILED)', message.upper())
+                if payment_match:
+                    service_name = payment_match.group(1).strip()
+            
+            # Pattern 3: "transaction with amount X RWF for [service]" (for failed transactions)
+            if not service_name:
+                transaction_match = re.search(r'transaction with amount \d+ RWF for ([^w]+)', message.upper())
+                if transaction_match:
+                    service_name = transaction_match.group(1).strip()
             
             # Extract transaction ID
             tx_id_match = re.search(r'(?i)txid:(\d+)', message)
@@ -860,21 +877,56 @@ class EnhancedMTNParser:
             date_match = re.search(r'(?:FAILED AT|has failed at) (\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})', message.upper())
             date = date_match.group(1) if date_match else timestamp
             
+            # Determine the intended transaction type and category based on service name
+            transaction_type, category = self._determine_failed_transaction_type(service_name, message)
+            
             return ParsedTransaction(
                 amount=amount,
-                transaction_type="FAILED",
-                category="FAILED_TRANSACTION",
+                transaction_type=transaction_type,
+                category=category,
                 direction="debit",
                 recipient_name=service_name,
                 transaction_id=transaction_id,
                 date=date,
                 original_message=message,
-                confidence=0.90
+                confidence=0.90,
+                status="FAILED"  # Add status field to indicate failure
             )
             
         except Exception as e:
             logger.error(f"Error parsing failed transaction: {e}")
             return None
+    
+    def _determine_failed_transaction_type(self, service_name: str, message: str) -> tuple[str, str]:
+        """Determine the intended transaction type and category for a failed transaction."""
+        if not service_name:
+            return "PAYMENT", "PAYMENT_FAILED"
+        
+        service_upper = service_name.upper()
+        message_upper = message.upper()
+        
+        # Data bundles and airtime - both are purchases
+        if any(keyword in service_upper for keyword in ["DATA BUNDLE", "BUNDLES AND PACKS", "MTN", "AIRTEL", "TIGO"]):
+            if "DATA" in service_upper or "BUNDLE" in service_upper:
+                return "PURCHASE", "PURCHASE_DATA_BUNDLE_FAILED"
+            else:
+                return "PURCHASE", "PURCHASE_AIRTIME_FAILED"
+        
+        # Payment to businesses
+        elif any(keyword in service_upper for keyword in ["ESICIA", "LTD", "COMPANY", "BUSINESS"]):
+            return "PAYMENT", "PAYMENT_BUSINESS_FAILED"
+        
+        # Mobile money transfers
+        elif any(keyword in service_upper for keyword in ["MOMO", "MOBILE MONEY", "TRANSFER"]):
+            return "TRANSFER", "TRANSFER_FAILED"
+        
+        # Utility payments
+        elif any(keyword in service_upper for keyword in ["WASAC", "ELECTRICITY", "WATER", "UTILITY"]):
+            return "PAYMENT", "PAYMENT_UTILITY_FAILED"
+        
+        # Default to payment
+        else:
+            return "PAYMENT", "PAYMENT_FAILED"
     
     def _parse_reversal(self, message: str, timestamp: Optional[str] = None) -> Optional[ParsedTransaction]:
         """Parse reversal message."""

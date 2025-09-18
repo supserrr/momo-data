@@ -1,6 +1,5 @@
 """
 API Routers for MoMo Data Processing
-Team 11 - Enterprise Web Development
 """
 
 from .transactions import router as transactions_router

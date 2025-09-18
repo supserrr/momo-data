@@ -1,6 +1,5 @@
 """
 Configuration Settings
-Team 11 - Enterprise Web Development
 """
 
 import os

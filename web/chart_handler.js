@@ -1,6 +1,3 @@
-// MoMo Dashboard - Chart Handler with NeoBrutalism Style
-// Handles data fetching and Chart.js visualization
-
 // Enhanced Brutalist Color Palette with more colors for sub-categories
 const COLORS = {
     yellow: '#ffc947',
@@ -60,6 +57,12 @@ let currentPage = 1;
 let pageSize = 10; // Default page size
 let totalPages = 1;
 let currentFilters = {};
+
+// Sorting state - default to recent date (descending)
+let currentSort = {
+    column: 'date',
+    direction: 'desc' // 'asc' or 'desc'
+};
 
 // Initialize dashboard on DOM load
 document.addEventListener('DOMContentLoaded', function() {
@@ -142,7 +145,7 @@ async function loadDashboardData() {
         // Update all sections with the data
         updateKeyMetrics(unifiedData);
         updateCharts(unifiedData);
-        updateTransactionsTable(unifiedData);
+        updateTransactionsTable(); // Call without data to use allTransactions with default sort
         
         console.log('Dashboard data loaded successfully with dedicated endpoints approach');
         
@@ -250,26 +253,68 @@ async function loadAmountDistribution() {
     }
 }
 
-// Load transactions for table (limited for performance)
+// Load all transactions for table using pagination
 async function loadTransactionsForTable() {
     try {
-        console.log('Fetching transactions for table...');
-        const response = await fetch('http://localhost:8001/api/transactions?limit=1000&offset=0');
-        if (!response.ok) {
-            throw new Error(`API error: ${response.status}`);
+        console.log('Fetching all transactions for table...');
+        const transactions = [];
+        let offset = 0;
+        const limit = 1000; // API maximum limit
+        let hasMore = true;
+        let consecutiveErrors = 0;
+        
+        while (hasMore && consecutiveErrors < 3) {
+            try {
+                console.log(`Fetching transactions: offset=${offset}, limit=${limit}`);
+                const response = await fetch(`http://localhost:8001/api/transactions?limit=${limit}&offset=${offset}`);
+                if (!response.ok) {
+                    throw new Error(`API error: ${response.status}`);
+                }
+                
+                const batch = await response.json();
+                console.log(`Received ${batch.length} transactions in batch`);
+                
+                // Check if we got an error response
+                if (batch.success === false) {
+                    console.warn(`API returned error at offset ${offset}, stopping pagination`);
+                    break;
+                }
+                
+                transactions.push(...batch);
+                
+                // If we got fewer than the limit, we've reached the end
+                hasMore = batch.length === limit;
+                offset += limit;
+                consecutiveErrors = 0; // Reset error counter on success
+                
+            } catch (error) {
+                console.warn(`Error fetching transactions at offset ${offset}:`, error);
+                consecutiveErrors++;
+                if (consecutiveErrors >= 3) {
+                    console.error('Too many consecutive errors, stopping pagination');
+                    break;
+                }
+                // Wait a bit before retrying
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
         }
-        return await response.json();
+        
+        console.log(`Successfully loaded ${transactions.length} total transactions`);
+        return transactions;
+        
     } catch (error) {
-        console.warn('Error fetching transactions for table:', error);
+        console.warn('Error in loadTransactionsForTable:', error);
         return [];
     }
 }
 
 // Load all transactions from API with pagination (legacy function, kept for compatibility)
 async function loadAllTransactions() {
+    try {
+        console.log('Fetching all transactions (legacy function)...');
         const allTransactionsData = [];
         let offset = 0;
-    const limit = 100; // Use larger chunks for better performance
+        const limit = 1000; // Use maximum API limit for better performance
         let hasMore = true;
         let consecutiveErrors = 0;
         
@@ -286,30 +331,38 @@ async function loadAllTransactions() {
                 const batch = await transactionsResponse.json();
                 console.log(`Received ${batch.length} transactions in batch`);
                 
-            // Check if we got an error response
+                // Check if we got an error response
                 if (batch.success === false) {
                     console.warn(`API returned error at offset ${offset}, stopping pagination`);
                     break;
                 }
                 
                 allTransactionsData.push(...batch);
-            
-            // If we got fewer than the limit, we've reached the end
+                
+                // If we got fewer than the limit, we've reached the end
                 hasMore = batch.length === limit;
                 offset += limit;
-            consecutiveErrors = 0; // Reset error counter on success
-                
-                // Safety check to prevent infinite loops
-                if (offset > 10000) break;
+                consecutiveErrors = 0; // Reset error counter on success
                 
             } catch (error) {
                 console.warn(`Error fetching transactions at offset ${offset}:`, error);
                 consecutiveErrors++;
-            offset += limit; // Try next batch
+                if (consecutiveErrors >= 3) {
+                    console.error('Too many consecutive errors, stopping pagination');
+                    break;
+                }
+                // Wait a bit before retrying
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
         }
+        
+        console.log(`Successfully loaded ${allTransactionsData.length} total transactions (legacy function)`);
+        return allTransactionsData;
+        
+    } catch (error) {
+        console.warn('Error in loadAllTransactions:', error);
+        return [];
     }
-    
-    return allTransactionsData;
 }
 
 // Load transaction types by amount data from API
@@ -1424,7 +1477,19 @@ function updateTransactionsTable(data) {
     if (!tbody) return;
     
     // Use filtered data if available, otherwise use allTransactions
-    const sourceData = data || filteredTransactions.length > 0 ? filteredTransactions : allTransactions;
+    let sourceData = data || filteredTransactions.length > 0 ? filteredTransactions : allTransactions;
+    
+    // If data is passed but it's not an array of transactions, use allTransactions
+    if (data && !Array.isArray(data)) {
+        sourceData = allTransactions;
+    }
+    
+    // Apply current sort if we have data and a sort column is set
+    if (currentSort.column && sourceData.length > 0) {
+        sourceData = [...sourceData].sort((a, b) => {
+            return sortTransactions(a, b, currentSort.column, currentSort.direction);
+        });
+    }
     
     // Calculate pagination
     const startIndex = (currentPage - 1) * pageSize;
@@ -1474,6 +1539,9 @@ function updateTransactionsTable(data) {
     
     // Update pagination controls
     updatePaginationControls();
+    
+    // Update sort indicators
+    updateSortIndicators();
 }
 
 // Pagination functions
@@ -1718,7 +1786,7 @@ if (typeof module !== 'undefined' && module.exports) {
     };
 }
 
-// View transaction details - optimized to only show relevant information
+// View transaction details
 async function viewTransactionDetails(transactionId) {
     let transaction;
     
@@ -2001,7 +2069,7 @@ async function viewTransactionDetails(transactionId) {
                            getValidMessage(transaction.raw_data) || 
                            getValidMessage(transaction.raw_sms_data);
     
-    // Debug: Log available fields for troubleshooting
+    // Log available fields for troubleshooting
     console.log('Transaction fields for original message:', {
         original_message: transaction.original_message,
         original_data: transaction.original_data,
@@ -2042,6 +2110,29 @@ async function viewTransactionDetails(transactionId) {
     
     modal.innerHTML = content;
     document.body.appendChild(modal);
+    
+    // Focus management for accessibility
+    const closeBtn = modal.querySelector('.close-btn');
+    if (closeBtn) {
+        closeBtn.focus();
+    }
+    
+    // Close modal on Escape key
+    const handleEscape = (e) => {
+        if (e.key === 'Escape') {
+            modal.remove();
+            document.removeEventListener('keydown', handleEscape);
+        }
+    };
+    document.addEventListener('keydown', handleEscape);
+    
+    // Close modal when clicking outside
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            modal.remove();
+            document.removeEventListener('keydown', handleEscape);
+        }
+    });
 }
 
 // Helper functions for transaction display
@@ -2133,6 +2224,13 @@ function clearFilters() {
     filteredTransactions = [...allTransactions];
     currentPage = 1;
     
+    // Reset sort state
+    currentSort = {
+        column: null,
+        direction: 'asc'
+    };
+    updateSortIndicators();
+    
     // Update table
     updateTransactionsTable(filteredTransactions);
 }
@@ -2147,5 +2245,112 @@ function debounce(func, wait) {
         clearTimeout(timeout);
         timeout = setTimeout(later, wait);
     };
+}
+
+// ========================================
+// SORTING FUNCTIONALITY
+// ========================================
+
+function sortTable(column) {
+    console.log(`Sorting by ${column}`);
+    
+    // Determine sort direction
+    if (currentSort.column === column) {
+        // Toggle direction if same column
+        currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+    } else {
+        // New column, start with ascending
+        currentSort.column = column;
+        currentSort.direction = 'asc';
+    }
+    
+    // Update sort indicators
+    updateSortIndicators();
+    
+    // Sort the filtered transactions
+    sortTransactions();
+    
+    // Reset to first page
+    currentPage = 1;
+    
+    // Update the table
+    updateTransactionsTable();
+}
+
+function updateSortIndicators() {
+    // Remove all active classes and reset indicators
+    document.querySelectorAll('.sortable').forEach(header => {
+        header.classList.remove('active');
+        const indicator = header.querySelector('.sort-indicator');
+        indicator.textContent = '↕';
+        indicator.className = 'sort-indicator';
+    });
+    
+    // Set active class and direction for current sort column
+    if (currentSort.column) {
+        const activeHeader = document.querySelector(`[data-sort="${currentSort.column}"]`);
+        if (activeHeader) {
+            activeHeader.classList.add('active');
+            const indicator = activeHeader.querySelector('.sort-indicator');
+            indicator.textContent = currentSort.direction === 'asc' ? '↑' : '↓';
+            indicator.classList.add(currentSort.direction);
+        }
+    }
+}
+
+function sortTransactions() {
+    if (!currentSort.column) return;
+    
+    const dataToSort = filteredTransactions.length > 0 ? filteredTransactions : allTransactions;
+    
+    dataToSort.sort((a, b) => {
+        let aValue, bValue;
+        
+        switch (currentSort.column) {
+            case 'date':
+                aValue = new Date(a.date || a.transaction_date || 0);
+                bValue = new Date(b.date || b.transaction_date || 0);
+                break;
+            case 'type':
+                aValue = (a.transaction_type || a.type || '').toLowerCase();
+                bValue = (b.transaction_type || b.type || '').toLowerCase();
+                break;
+            case 'amount':
+                aValue = parseFloat(a.amount || 0);
+                bValue = parseFloat(b.amount || 0);
+                break;
+            case 'direction':
+                aValue = (a.direction || '').toLowerCase();
+                bValue = (b.direction || '').toLowerCase();
+                break;
+            case 'status':
+                aValue = (a.status || '').toLowerCase();
+                bValue = (b.status || '').toLowerCase();
+                break;
+            default:
+                return 0;
+        }
+        
+        // Handle null/undefined values
+        if (aValue == null) aValue = '';
+        if (bValue == null) bValue = '';
+        
+        let comparison = 0;
+        
+        if (aValue < bValue) {
+            comparison = -1;
+        } else if (aValue > bValue) {
+            comparison = 1;
+        }
+        
+        return currentSort.direction === 'desc' ? -comparison : comparison;
+    });
+    
+    // Update filteredTransactions if we sorted it
+    if (filteredTransactions.length > 0) {
+        filteredTransactions = [...dataToSort];
+    } else {
+        allTransactions = [...dataToSort];
+    }
 }
 
