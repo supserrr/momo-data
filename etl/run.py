@@ -122,7 +122,7 @@ def convert_to_database_format(transactions: List[ParsedTransaction]) -> List[Di
             'amount': transaction.amount,
             'phone': transaction.recipient_phone or transaction.sender_phone,
             'date': transaction.date,
-            'reference': transaction.transaction_id or transaction.financial_transaction_id,
+            'reference': transaction.transaction_id or transaction.financial_transaction_id or transaction.external_transaction_id,
             'type': transaction.transaction_type,
             'transaction_type': transaction.transaction_type,
             'direction': transaction.direction,
@@ -141,7 +141,7 @@ def convert_to_database_format(transactions: List[ParsedTransaction]) -> List[Di
             'fee': transaction.fee,
             'new_balance': transaction.new_balance,
             'financial_transaction_id': transaction.financial_transaction_id,
-            'external_transaction_id': transaction.transaction_id,
+            'external_transaction_id': transaction.external_transaction_id,
             'personal_id': transaction.sender_momo_id or transaction.momo_code,
             'original_data': transaction.original_message,
             'original_message': transaction.original_message,
@@ -156,7 +156,8 @@ def convert_to_database_format(transactions: List[ParsedTransaction]) -> List[Di
                 'business_name': transaction.business_name,
                 'agent_momo_number': transaction.agent_momo_number,
                 'financial_transaction_id': transaction.financial_transaction_id,
-                'external_transaction_id': transaction.external_transaction_id
+                'external_transaction_id': transaction.external_transaction_id,
+                'transaction_id': transaction.transaction_id
             },
             'parsed_at': datetime.now().isoformat(),
             'cleaned_at': datetime.now().isoformat(),

@@ -87,45 +87,64 @@ document.addEventListener('DOMContentLoaded', function() {
     // setInterval(loadDashboardData, 30000);
 });
 
-// Load dashboard data from API - unified approach
+// Load dashboard data from API - efficient approach with dedicated endpoints
 async function loadDashboardData() {
     try {
-        console.log('Loading unified dashboard data...');
+        console.log('Loading dashboard data from dedicated API endpoints...');
         
-        // Load ALL transactions first - this is our single source of truth
-        console.log('Starting to load transactions...');
-        const allTransactionsData = await loadAllTransactions();
-        console.log('Loaded transactions:', allTransactionsData.length);
+        // Load all data in parallel from dedicated endpoints
+        const [
+            summaryData,
+            monthlyStats,
+            categoryDistribution,
+            transactionTypesData,
+            hourlyPattern,
+            amountDistribution,
+            transactionsData
+        ] = await Promise.all([
+            loadSummaryData(),
+            loadMonthlyStats(),
+            loadCategoryDistribution(),
+            loadTransactionTypesByAmount(),
+            loadHourlyPattern(),
+            loadAmountDistribution(),
+            loadTransactionsForTable()
+        ]);
         
-        if (allTransactionsData.length === 0) {
-            throw new Error('No transaction data available');
-        }
+        console.log('All data loaded successfully:', {
+            summary: summaryData,
+            monthlyStats: monthlyStats.length,
+            categories: categoryDistribution.length,
+            transactionTypes: transactionTypesData.length,
+            hourlyPattern: hourlyPattern.length,
+            amountDistribution: amountDistribution.length,
+            transactions: transactionsData.length
+        });
         
-        // Load transaction types by amount data
-        console.log('Loading transaction types by amount...');
-        const transactionTypesData = await loadTransactionTypesByAmount();
-        console.log('Loaded transaction types:', transactionTypesData);
-        
-        // Generate all other data from the transactions
-        console.log('Generating unified data...');
-        const unifiedData = generateUnifiedDataFromTransactions(allTransactionsData);
-        console.log('Unified data generated:', unifiedData);
-        
-        // Add transaction types data to unified data
-        unifiedData.charts.transaction_types_by_amount = transactionTypesData;
-        
-        // Store all transactions for pagination and filtering
-        allTransactions = allTransactionsData;
-        filteredTransactions = [...allTransactionsData];
-    currentPage = 1;
+        // Store transactions for pagination and filtering
+        allTransactions = transactionsData;
+        filteredTransactions = [...transactionsData];
+        currentPage = 1;
         totalPages = Math.ceil(allTransactions.length / pageSize);
         
-        // Update all sections with the same unified data
+        // Create unified data structure
+        const unifiedData = {
+            summary: summaryData,
+            charts: {
+                monthly_stats: monthlyStats,
+                category_distribution: categoryDistribution,
+                transaction_types_by_amount: transactionTypesData,
+                hourly_pattern: hourlyPattern,
+                amount_distribution: amountDistribution
+            }
+        };
+        
+        // Update all sections with the data
         updateKeyMetrics(unifiedData);
         updateCharts(unifiedData);
         updateTransactionsTable(unifiedData);
         
-        console.log('Dashboard data loaded successfully with unified approach');
+        console.log('Dashboard data loaded successfully with dedicated endpoints approach');
         
     } catch (error) {
         console.error('Error loading dashboard data:', error);
@@ -155,7 +174,98 @@ async function loadDashboardData() {
     }
 }
 
-// Load all transactions from API with pagination
+// Load summary data for key metrics
+async function loadSummaryData() {
+    try {
+        console.log('Fetching summary data...');
+        const response = await fetch('http://localhost:8001/api/dashboard-data');
+        if (!response.ok) {
+            throw new Error(`API error: ${response.status}`);
+        }
+        const data = await response.json();
+        return data.summary || { total_transactions: 0, total_amount: 0, success_rate: 0 };
+    } catch (error) {
+        console.warn('Error fetching summary data:', error);
+        return { total_transactions: 0, total_amount: 0, success_rate: 0 };
+    }
+}
+
+// Load monthly stats for volume chart
+async function loadMonthlyStats() {
+    try {
+        console.log('Fetching monthly stats...');
+        const response = await fetch('http://localhost:8001/api/monthly-stats');
+        if (!response.ok) {
+            throw new Error(`API error: ${response.status}`);
+        }
+        return await response.json();
+    } catch (error) {
+        console.warn('Error fetching monthly stats:', error);
+        return [];
+    }
+}
+
+// Load category distribution for doughnut chart
+async function loadCategoryDistribution() {
+    try {
+        console.log('Fetching category distribution...');
+        const response = await fetch('http://localhost:8001/api/category-distribution');
+        if (!response.ok) {
+            throw new Error(`API error: ${response.status}`);
+        }
+        return await response.json();
+    } catch (error) {
+        console.warn('Error fetching category distribution:', error);
+        return [];
+    }
+}
+
+// Load hourly pattern for line chart
+async function loadHourlyPattern() {
+    try {
+        console.log('Fetching hourly pattern...');
+        const response = await fetch('http://localhost:8001/api/hourly-pattern');
+        if (!response.ok) {
+            throw new Error(`API error: ${response.status}`);
+        }
+        return await response.json();
+    } catch (error) {
+        console.warn('Error fetching hourly pattern:', error);
+        return [];
+    }
+}
+
+// Load amount distribution for bar chart
+async function loadAmountDistribution() {
+    try {
+        console.log('Fetching amount distribution...');
+        const response = await fetch('http://localhost:8001/api/amount-distribution');
+        if (!response.ok) {
+            throw new Error(`API error: ${response.status}`);
+        }
+        return await response.json();
+    } catch (error) {
+        console.warn('Error fetching amount distribution:', error);
+        return [];
+    }
+}
+
+// Load transactions for table (limited for performance)
+async function loadTransactionsForTable() {
+    try {
+        console.log('Fetching transactions for table...');
+        const response = await fetch('http://localhost:8001/api/transactions?limit=1000&offset=0');
+        if (!response.ok) {
+            throw new Error(`API error: ${response.status}`);
+        }
+        return await response.json();
+    } catch (error) {
+        console.warn('Error fetching transactions for table:', error);
+        return [];
+    }
+}
+
+// Load all transactions from API with pagination (legacy function, kept for compatibility)
 async function loadAllTransactions() {
         const allTransactionsData = [];
         let offset = 0;
@@ -802,22 +912,23 @@ function updateAmountChart(amountData) {
         return;
     }
     
+    // Generate colors for all ranges dynamically
+    const colorKeys = Object.keys(COLORS).filter(key => 
+        !['black', 'white', 'gray', 'darkGray'].includes(key)
+    );
+    const backgroundColors = amountData.map((_, index) => 
+        COLORS[colorKeys[index % colorKeys.length]]
+    );
+    
     const chartData = {
-        labels: amountData.map(a => a.range),
+        labels: amountData.map(a => a.amount_range),
             datasets: [{
             label: 'Transaction Count',
             data: amountData.map(a => a.count),
-            backgroundColor: [
-                COLORS.yellow,
-                COLORS.pink,
-                COLORS.mint,
-                COLORS.purple,
-                COLORS.blue,
-                COLORS.orange
-            ],
+            backgroundColor: backgroundColors,
                 borderColor: COLORS.black,
                 borderWidth: BRUTALIST_CONFIG.borderWidth,
-            barThickness: 40,
+            barThickness: 30, // Reduced thickness to fit more bars
             borderSkipped: false,
             borderRadius: 0,
             borderJoinStyle: 'miter'
@@ -1608,7 +1719,7 @@ if (typeof module !== 'undefined' && module.exports) {
 }
 
 // View transaction details - optimized to only show relevant information
-function viewTransactionDetails(transactionId) {
+async function viewTransactionDetails(transactionId) {
     let transaction;
     
     // Try to find by ID first
@@ -1629,9 +1740,33 @@ function viewTransactionDetails(transactionId) {
         return;
     }
     
+    // Fetch comprehensive transaction details from the API
+    try {
+        console.log('Fetching detailed transaction data for ID:', transaction.id);
+        const response = await fetch(`http://localhost:8001/api/transactions/${transaction.id}/details`);
+        if (!response.ok) {
+            throw new Error(`API error: ${response.status}`);
+        }
+        const detailedTransaction = await response.json();
+        console.log('Detailed transaction data:', detailedTransaction);
+        
+        // Use the detailed transaction data
+        transaction = detailedTransaction;
+    } catch (error) {
+        console.warn('Error fetching detailed transaction data:', error);
+        // Fall back to the basic transaction data
+    }
+    
     // Determine transaction type and create appropriate view
     const transactionType = (transaction.transaction_type || transaction.type || 'unknown').toUpperCase();
     const category = transaction.category || 'unknown';
+    
+    // Use categorized fields if available
+    const financial = transaction.categorized_fields?.financial || {};
+    const identifiers = transaction.categorized_fields?.identifiers || {};
+    const parties = transaction.categorized_fields?.parties || {};
+    const metadata = transaction.categorized_fields?.metadata || {};
+    const rawData = transaction.categorized_fields?.raw_data || {};
     
     // Create modal with consistent NeoBrutalism styling
     const modal = document.createElement('div');
@@ -1655,95 +1790,108 @@ function viewTransactionDetails(transactionId) {
                     <!-- Amount (always shown) -->
                     <div class="detail-item">
                         <label>Amount:</label>
-                        <span class="formatted-number large-amount ${transactionType === 'RECEIVE' ? 'positive' : ''}">${formatCurrency(transaction.amount)}</span>
+                        <span class="formatted-number large-amount ${transactionType === 'RECEIVE' ? 'positive' : ''}">${formatCurrency(financial.amount || transaction.amount)}</span>
                     </div>`;
     
     // Only show fee if it exists and is greater than 0
-    if (transaction.fee && transaction.fee > 0) {
+    const fee = financial.fee || transaction.fee;
+    if (fee && fee > 0) {
         content += `
                     <div class="detail-item">
                         <label>Fee:</label>
-                        <span class="formatted-number">${formatCurrency(transaction.fee)}</span>
+                        <span class="formatted-number">${formatCurrency(fee)}</span>
                     </div>`;
     }
     
     // Only show new balance if available
-    if (transaction.new_balance) {
+    const newBalance = financial.new_balance || transaction.new_balance;
+    if (newBalance) {
         content += `
                     <div class="detail-item">
                         <label>New Balance:</label>
-                        <span class="formatted-number">${formatCurrency(transaction.new_balance)}</span>
+                        <span class="formatted-number">${formatCurrency(newBalance)}</span>
                     </div>`;
     }
     
     // Show relevant party information based on transaction type
     if (transactionType === 'DEPOSIT') {
         // For deposits, show agent info if available
-        if (transaction.agent_momo_number) {
+        const agentMomoNumber = parties.agent_momo_number || transaction.agent_momo_number;
+        if (agentMomoNumber) {
             content += `
                     <div class="detail-item">
                         <label>Agent Momo Number:</label>
-                        <span>${formatPhone(transaction.agent_momo_number)}</span>
+                        <span>${formatPhone(agentMomoNumber)}</span>
                     </div>`;
         }
     } else if (transactionType === 'TRANSFER' || transactionType === 'RECEIVE') {
         // For transfers, show sender/recipient info
-        if (transaction.sender_name) {
+        const senderName = parties.sender_name || transaction.sender_name;
+        const senderPhone = parties.sender_phone || transaction.sender_phone;
+        const recipientName = parties.recipient_name || transaction.recipient_name;
+        const recipientPhone = parties.recipient_phone || transaction.recipient_phone;
+        const momoCode = parties.momo_code || transaction.momo_code;
+        
+        if (senderName) {
             content += `
                     <div class="detail-item">
                         <label>Sender Name:</label>
-                        <span class="sender-name">${transaction.sender_name}</span>
+                        <span class="sender-name">${senderName}</span>
                     </div>`;
         }
-        if (transaction.sender_phone) {
+        if (senderPhone) {
             content += `
                     <div class="detail-item">
                         <label>Sender Phone:</label>
-                        <span>${formatPhone(transaction.sender_phone)}</span>
+                        <span>${formatPhone(senderPhone)}</span>
                     </div>`;
         }
-        if (transaction.recipient_name) {
+        if (recipientName) {
             content += `
                     <div class="detail-item">
                         <label>Recipient Name:</label>
-                        <span>${transaction.recipient_name}</span>
+                        <span>${recipientName}</span>
                     </div>`;
         }
-        if (transaction.recipient_phone) {
+        if (recipientPhone) {
             content += `
                     <div class="detail-item">
                         <label>Recipient Phone:</label>
-                        <span>${formatPhone(transaction.recipient_phone)}</span>
+                        <span>${formatPhone(recipientPhone)}</span>
                     </div>`;
         }
-        if (transaction.momo_code) {
+        if (momoCode) {
             content += `
                     <div class="detail-item">
                         <label>Momo Code:</label>
-                        <span>${transaction.momo_code}</span>
+                        <span>${momoCode}</span>
                     </div>`;
         }
     } else if (transactionType === 'PAYMENT') {
         // For payments, show business info if available
-        if (transaction.business_name) {
+        const businessName = parties.business_name || transaction.business_name;
+        const recipientName = parties.recipient_name || transaction.recipient_name;
+        const momoCode = parties.momo_code || transaction.momo_code;
+        
+        if (businessName) {
             content += `
                     <div class="detail-item full-width">
                         <label>Business Name:</label>
-                        <span class="business-name">${transaction.business_name}</span>
+                        <span class="business-name">${businessName}</span>
                     </div>`;
         }
-        if (transaction.recipient_name) {
+        if (recipientName) {
             content += `
                     <div class="detail-item">
                         <label>Recipient Name:</label>
-                        <span>${transaction.recipient_name}</span>
+                        <span>${recipientName}</span>
                     </div>`;
         }
-        if (transaction.momo_code) {
+        if (momoCode) {
             content += `
                     <div class="detail-item">
                         <label>Momo Code:</label>
-                        <span>${transaction.momo_code}</span>
+                        <span>${momoCode}</span>
                     </div>`;
         }
     }
@@ -1752,26 +1900,33 @@ function viewTransactionDetails(transactionId) {
     const ids = [];
     const seenValues = new Set();
     
+    // Use categorized identifiers if available
+    const txId = identifiers.transaction_id || transaction.transaction_id;
+    const externalTransactionId = identifiers.external_transaction_id || transaction.external_transaction_id;
+    const financialTransactionId = identifiers.financial_transaction_id || transaction.financial_transaction_id;
+    const reference = identifiers.reference || transaction.reference;
+    
     // For payment transactions, show the appropriate ID based on what's available
     if (transactionType === 'PAYMENT') {
         // For payments, prioritize the actual transaction ID from the message
-        if (transaction.transaction_id) {
-            ids.push({ label: 'Transaction ID', value: transaction.transaction_id });
-            seenValues.add(transaction.transaction_id);
+        if (txId) {
+            ids.push({ label: 'Transaction ID', value: txId });
+            seenValues.add(txId);
         }
-        if (transaction.financial_transaction_id && !seenValues.has(transaction.financial_transaction_id)) {
-            ids.push({ label: 'Financial ID', value: transaction.financial_transaction_id });
-            seenValues.add(transaction.financial_transaction_id);
+        if (financialTransactionId && !seenValues.has(financialTransactionId)) {
+            ids.push({ label: 'Financial ID', value: financialTransactionId });
+            seenValues.add(financialTransactionId);
         }
-        if (transaction.external_transaction_id && !seenValues.has(transaction.external_transaction_id)) {
-            ids.push({ label: 'External ID', value: transaction.external_transaction_id });
-            seenValues.add(transaction.external_transaction_id);
+        if (externalTransactionId && !seenValues.has(externalTransactionId)) {
+            ids.push({ label: 'External ID', value: externalTransactionId });
+            seenValues.add(externalTransactionId);
         }
     } else {
         // For other transaction types, show all available IDs
-        if (transaction.id) ids.push({ label: 'Transaction ID', value: transaction.id });
-        if (transaction.external_transaction_id) ids.push({ label: 'External ID', value: transaction.external_transaction_id });
-        if (transaction.financial_transaction_id) ids.push({ label: 'Financial ID', value: transaction.financial_transaction_id });
+        if (transaction.id) ids.push({ label: 'Database ID', value: transaction.id });
+        if (txId) ids.push({ label: 'Transaction ID', value: txId });
+        if (externalTransactionId) ids.push({ label: 'External ID', value: externalTransactionId });
+        if (financialTransactionId) ids.push({ label: 'Financial ID', value: financialTransactionId });
         
         // Remove duplicates
         const uniqueIds = [];
@@ -1795,37 +1950,40 @@ function viewTransactionDetails(transactionId) {
     }
     
     // Always show date
+    const date = metadata.date || transaction.date;
     content += `
                     <div class="detail-item">
                         <label>Date:</label>
-                        <span>${formatDate(transaction.date)}</span>
+                        <span>${formatDate(date)}</span>
                     </div>`;
     
     // Only show status if available
-    if (transaction.status) {
+    const status = metadata.status || transaction.status;
+    if (status) {
         content += `
                     <div class="detail-item">
                         <label>Status:</label>
-                        <span class="status-badge status-${transaction.status.toLowerCase()}">${transaction.status}</span>
+                        <span class="status-badge status-${status.toLowerCase()}">${status}</span>
                     </div>`;
     }
     
     // Only show confidence score if available
-    if (transaction.confidence_score) {
+    const confidenceScore = metadata.confidence_score || transaction.confidence_score;
+    if (confidenceScore) {
         content += `
                     <div class="detail-item">
                         <label>Confidence Score:</label>
-                        <span>${(transaction.confidence_score * 100).toFixed(1)}%</span>
+                        <span>${(confidenceScore * 100).toFixed(1)}%</span>
                     </div>`;
     }
     
     // Only show reference if available and not duplicate of an ID
     // For payment transactions, reference is usually the same as transaction_id, so skip it
-    if (transaction.reference && !seenValues.has(transaction.reference) && transactionType !== 'PAYMENT') {
+    if (reference && !seenValues.has(reference) && transactionType !== 'PAYMENT') {
         content += `
                     <div class="detail-item">
                         <label>Reference:</label>
-                        <span>${transaction.reference}</span>
+                        <span>${reference}</span>
                     </div>`;
     }
     
@@ -1837,7 +1995,8 @@ function viewTransactionDetails(transactionId) {
         return trimmed.length > 0 ? trimmed : null;
     };
     
-    const originalMessage = getValidMessage(transaction.original_message) || 
+    const originalMessage = getValidMessage(rawData.original_message) || 
+                           getValidMessage(transaction.original_message) || 
                            getValidMessage(transaction.original_data) || 
                            getValidMessage(transaction.raw_data) || 
                            getValidMessage(transaction.raw_sms_data);

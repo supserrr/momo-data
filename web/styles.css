@@ -1024,7 +1024,8 @@ h1, h2, h3, h4, h5, h6 {
     color: var(--brutal-black);
 }
 
-/* Type Badge Colors */
+/* Type Badge Colors - Each transaction type gets a unique neubrutalist color */
+/* Main transaction types (8 unique colors) */
 .type-deposit {
     background: var(--brutal-mint);
     color: var(--brutal-black);
@@ -1045,8 +1046,29 @@ h1, h2, h3, h4, h5, h6 {
     color: var(--brutal-black);
 }
 
-.type-airtime {
+.type-purchase {
     background: var(--brutal-purple);
+    color: var(--brutal-black);
+}
+
+.type-receive {
+    background: var(--brutal-yellow);
+    color: var(--brutal-black);
+}
+
+.type-reversal {
+    background: var(--brutal-green);
+    color: var(--brutal-black);
+}
+
+.type-failed {
+    background: var(--brutal-dark-gray);
+    color: var(--brutal-white);
+}
+
+/* Legacy types for backward compatibility (reuse colors from main types) */
+.type-airtime {
+    background: var(--brutal-mint);
     color: var(--brutal-black);
 }
 

@@ -81,19 +81,19 @@ class EnhancedMTNParser:
             return "INCOMING_MONEY"
         
         # 2. AIRTIME PURCHASE (*162*TxId format) - check this first
-        elif "*162*TXID:" in message_upper and "AIRTIME" in message_upper:
+        elif "*162*[Tt]X[Ii][Dd]:" in message_upper and "AIRTIME" in message_upper:
             return "AIRTIME_PURCHASE"
         
         # 3. DATA BUNDLE PURCHASE (*162*TxId format) - check this first
-        elif "*162*TXID:" in message_upper and "BUNDLES AND PACKS" in message_upper:
+        elif "*162*[Tt]X[Ii][Dd]:" in message_upper and "BUNDLES AND PACKS" in message_upper:
             return "DATA_BUNDLE_PURCHASE"
         
         # 4. BUSINESS PAYMENT (*162*TxId format with company names) - check this before generic payment
-        elif "*162*TXID:" in message_upper and any(company in message_upper for company in ["ONAFRIQ", "ESICIA", "MTN"]):
+        elif "*162*[Tt]X[Ii][Dd]:" in message_upper and any(company in message_upper for company in ["ONAFRIQ", "ESICIA", "MTN"]):
             return "BUSINESS_PAYMENT"
         
         # 5. PAYMENT TO MOMO CODE (registered to a person)
-        elif "TXID:" in message_upper and "YOUR PAYMENT OF" in message_upper and "HAS BEEN COMPLETED" in message_upper:
+        elif re.search(r'(?i)txid:', message) and "YOUR PAYMENT OF" in message_upper and "HAS BEEN COMPLETED" in message_upper:
             return "PAYMENT_MOMO_CODE"
         
         # 3. DEPOSIT FROM MOMO AGENT/MERCHANT (*113*R* with "bank deposit")
@@ -127,7 +127,7 @@ class EnhancedMTNParser:
             return "TRANSFER_IMBANK"
         
         # 11. PAYMENT (different format)
-        elif "YOUR PAYMENT OF" in message_upper and "HAS BEEN COMPLETED" in message_upper and "TXID:" not in message_upper:
+        elif "YOUR PAYMENT OF" in message_upper and "HAS BEEN COMPLETED" in message_upper and not re.search(r'(?i)txid:', message):
             return "PAYMENT_ALTERNATIVE"
         
         # 12. FAILED TRANSACTION
@@ -229,6 +229,10 @@ class EnhancedMTNParser:
     def _parse_payment_momo_code(self, message: str, timestamp: Optional[str] = None) -> Optional[ParsedTransaction]:
         """Parse payment to momo code message."""
         try:
+            # Extract transaction ID
+            tx_id_match = re.search(r'(?i)txid:\s*(\d+)', message)
+            transaction_id = tx_id_match.group(1) if tx_id_match else None
+            
             # Extract amount
             amount_match = re.search(r'YOUR PAYMENT OF ([\d,]+(?:\.\d{2})?) RWF', message.upper())
             if not amount_match:
@@ -236,12 +240,38 @@ class EnhancedMTNParser:
             amount = float(amount_match.group(1).replace(',', ''))
             
             # Extract recipient name and momo code
-            recipient_match = re.search(r'TO ([^(]+) (\d{5})', message.upper())
-            if recipient_match:
-                recipient_name = recipient_match.group(1).strip()
-                momo_code = recipient_match.group(2)
+            # Try alternative format: "TO [name] with token [code]"
+            alt_match = re.search(r'TO ([A-Z\s]+?) WITH TOKEN (\d+)', message.upper())
+            if alt_match:
+                recipient_name = alt_match.group(1).strip()
+                momo_code = alt_match.group(2)
             else:
-                return None
+                # Try format: "TO [name] [code]" (without parentheses)
+                simple_match = re.search(r'TO ([A-Z\s]+) (\d+)', message.upper())
+                if simple_match:
+                    recipient_name = simple_match.group(1).strip()
+                    momo_code = simple_match.group(2)
+                else:
+                    # Try original format: "TO [name] ([code])"
+                    recipient_match = re.search(r'TO ([^(]+) \((\d+)\)', message.upper())
+                    if recipient_match:
+                        recipient_name = recipient_match.group(1).strip()
+                        momo_code = recipient_match.group(2)
+                    else:
+                        return None
+            
+            # Extract business name from recipient name if it contains business info
+            business_name = None
+            if recipient_name and 'WITH TOKEN' in recipient_name.upper():
+                # Extract just the business name part
+                business_match = re.search(r'^([A-Z\s]+?)\s+WITH TOKEN', recipient_name.upper())
+                if business_match:
+                    business_name = business_match.group(1).strip()
+                    # Clean up the recipient name to just show the business name
+                    recipient_name = business_name
+            else:
+                # For simple business names like "WASAC", use the recipient name as business name
+                business_name = recipient_name
             
             # Extract new balance
             balance_match = re.search(r'YOUR NEW BALANCE:? ([\d,]+(?:\.\d{2})?) RWF', message.upper())
@@ -250,10 +280,6 @@ class EnhancedMTNParser:
             # Extract fee
             fee_match = re.search(r'FEE WAS (\d+) RWF', message.upper())
             fee = float(fee_match.group(1)) if fee_match else 0.0
-            
-            # Extract transaction ID
-            tx_id_match = re.search(r'TXID: (\d+)', message.upper())
-            transaction_id = tx_id_match.group(1) if tx_id_match else None
             
             # Extract date
             date_match = re.search(r'AT (\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})', message.upper())
@@ -266,6 +292,7 @@ class EnhancedMTNParser:
                 direction="debit",
                 recipient_name=recipient_name,
                 momo_code=momo_code,
+                business_name=business_name,
                 fee=fee,
                 new_balance=new_balance,
                 transaction_id=transaction_id,
@@ -525,7 +552,7 @@ class EnhancedMTNParser:
             fee = float(fee_match.group(1)) if fee_match else 0.0
             
             # Extract transaction ID
-            tx_id_match = re.search(r'TXID:(\d+)', message.upper())
+            tx_id_match = re.search(r'(?i)txid:(\d+)', message)
             transaction_id = tx_id_match.group(1) if tx_id_match else None
             
             # Extract date
@@ -568,7 +595,7 @@ class EnhancedMTNParser:
             fee = float(fee_match.group(1).replace(',', '')) if fee_match else 0.0
             
             # Extract transaction ID - handle both formats
-            tx_id_match = re.search(r'TXID:(\d+)', message.upper())
+            tx_id_match = re.search(r'(?i)txid:(\d+)', message)
             transaction_id = tx_id_match.group(1) if tx_id_match else None
             
             # Extract financial transaction ID
@@ -628,7 +655,7 @@ class EnhancedMTNParser:
             fee = float(fee_match.group(1).replace(',', '')) if fee_match else 0.0
             
             # Extract transaction ID - handle both formats
-            tx_id_match = re.search(r'TXID:(\d+)', message.upper())
+            tx_id_match = re.search(r'(?i)txid:(\d+)', message)
             transaction_id = tx_id_match.group(1) if tx_id_match else None
             
             # Extract financial transaction ID
@@ -826,7 +853,7 @@ class EnhancedMTNParser:
                 service_name = service_name.strip() if service_name else None
             
             # Extract transaction ID
-            tx_id_match = re.search(r'TXID:(\d+)', message.upper())
+            tx_id_match = re.search(r'(?i)txid:(\d+)', message)
             transaction_id = tx_id_match.group(1) if tx_id_match else None
             
             # Extract date

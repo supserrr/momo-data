@@ -215,6 +215,66 @@ async def legacy_get_analytics(
         logger.error(f"Error fetching analytics data: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/transaction-types-by-amount", include_in_schema=False)
+async def legacy_get_transaction_types_by_amount(
+    db: MySQLDatabaseManager = Depends(get_db_manager)
+):
+    """Legacy transaction types by amount endpoint for backward compatibility"""
+    try:
+        transaction_types = db.get_transaction_types_by_amount()
+        return transaction_types
+    except Exception as e:
+        logger.error(f"Error fetching transaction types by amount: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/monthly-stats", include_in_schema=False)
+async def legacy_get_monthly_stats(
+    db: MySQLDatabaseManager = Depends(get_db_manager)
+):
+    """Legacy monthly stats endpoint for backward compatibility"""
+    try:
+        monthly_data = db.get_monthly_transaction_data()
+        return monthly_data.get('monthly_stats', [])
+    except Exception as e:
+        logger.error(f"Error fetching monthly stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/category-distribution", include_in_schema=False)
+async def legacy_get_category_distribution(
+    db: MySQLDatabaseManager = Depends(get_db_manager)
+):
+    """Legacy category distribution endpoint for backward compatibility"""
+    try:
+        dashboard_data = db.get_dashboard_data()
+        return dashboard_data.get('categories', [])
+    except Exception as e:
+        logger.error(f"Error fetching category distribution: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/hourly-pattern", include_in_schema=False)
+async def legacy_get_hourly_pattern(
+    db: MySQLDatabaseManager = Depends(get_db_manager)
+):
+    """Legacy hourly pattern endpoint for backward compatibility"""
+    try:
+        monthly_data = db.get_monthly_transaction_data()
+        return monthly_data.get('hourly_pattern', [])
+    except Exception as e:
+        logger.error(f"Error fetching hourly pattern: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/amount-distribution", include_in_schema=False)
+async def legacy_get_amount_distribution(
+    db: MySQLDatabaseManager = Depends(get_db_manager)
+):
+    """Legacy amount distribution endpoint for backward compatibility"""
+    try:
+        dashboard_data = db.get_dashboard_data()
+        return dashboard_data.get('amount_distribution', [])
+    except Exception as e:
+        logger.error(f"Error fetching amount distribution: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Startup and shutdown events
 @app.on_event("startup")
 async def startup_event():

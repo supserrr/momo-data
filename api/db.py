@@ -279,24 +279,34 @@ class MySQLDatabaseManager:
                     category['last_updated'] = category['last_updated'].strftime('%Y-%m-%d %H:%M:%S')
                 categories.append(category)
             
-            # Get amount distribution
+            # Get amount distribution with more granular ranges
             cursor.execute("""
                 SELECT 
                     CASE 
-                        WHEN amount < 10000 THEN '0-10000'
-                        WHEN amount < 50000 THEN '10000-50000'
-                        WHEN amount < 100000 THEN '50000-100000'
-                        ELSE '100000+'
+                        WHEN amount < 1000 THEN '0-1K'
+                        WHEN amount < 5000 THEN '1K-5K'
+                        WHEN amount < 10000 THEN '5K-10K'
+                        WHEN amount < 25000 THEN '10K-25K'
+                        WHEN amount < 50000 THEN '25K-50K'
+                        WHEN amount < 100000 THEN '50K-100K'
+                        WHEN amount < 250000 THEN '100K-250K'
+                        WHEN amount < 500000 THEN '250K-500K'
+                        ELSE '500K+'
                     END as amount_range,
                     COUNT(*) as count
                 FROM transactions
                 GROUP BY amount_range
                 ORDER BY 
                     CASE 
-                        WHEN amount_range = '0-10000' THEN 1
-                        WHEN amount_range = '10000-50000' THEN 2
-                        WHEN amount_range = '50000-100000' THEN 3
-                        ELSE 4
+                        WHEN amount_range = '0-1K' THEN 1
+                        WHEN amount_range = '1K-5K' THEN 2
+                        WHEN amount_range = '5K-10K' THEN 3
+                        WHEN amount_range = '10K-25K' THEN 4
+                        WHEN amount_range = '25K-50K' THEN 5
+                        WHEN amount_range = '50K-100K' THEN 6
+                        WHEN amount_range = '100K-250K' THEN 7
+                        WHEN amount_range = '250K-500K' THEN 8
+                        ELSE 9
                     END
             """)
             amount_distribution = [dict(row) for row in cursor.fetchall()]
