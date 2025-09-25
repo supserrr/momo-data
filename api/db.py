@@ -9,7 +9,7 @@ import json
 import logging
 from typing import List, Dict, Any, Optional
 from contextlib import contextmanager
-from etl.config import MYSQL_CONFIG
+from .config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -17,23 +17,38 @@ class MySQLDatabaseManager:
     """MySQL database manager for API operations."""
     
     def __init__(self, config: Dict[str, Any] = None):
-        # Use root user with no password for testing
-        default_config = {
-            'host': 'localhost',
-            'port': 3306,
-            'database': 'momo_sms_processing',
-            'user': 'root',
-            'password': '',
-            'unix_socket': '/tmp/mysql.sock'
-        }
-        self.config = config or default_config
+        """Initialize database manager with configuration."""
+        self.config = config or settings.database_config
+        self.connection_pool = None
+        self._initialize_connection_pool()
+    
+    def _initialize_connection_pool(self):
+        """Initialize connection pool for better performance."""
+        try:
+            if settings.is_production:
+                # Use connection pooling in production
+                self.connection_pool = mysql.connector.pooling.MySQLConnectionPool(
+                    pool_name="momo_pool",
+                    pool_size=settings.MAX_CONNECTIONS,
+                    pool_reset_session=True,
+                    **self.config
+                )
+                logger.info(f"Database connection pool initialized with {settings.MAX_CONNECTIONS} connections")
+        except Error as e:
+            logger.warning(f"Could not initialize connection pool: {e}. Using direct connections.")
+            self.connection_pool = None
     
     @contextmanager
     def get_connection(self):
         """Get MySQL database connection with proper cleanup."""
         conn = None
         try:
-            conn = mysql.connector.connect(**self.config)
+            if self.connection_pool:
+                # Use connection from pool
+                conn = self.connection_pool.get_connection()
+            else:
+                # Use direct connection
+                conn = mysql.connector.connect(**self.config)
             yield conn
         except Error as e:
             if conn:
@@ -42,7 +57,12 @@ class MySQLDatabaseManager:
             raise
         finally:
             if conn and conn.is_connected():
-                conn.close()
+                if self.connection_pool:
+                    # Return connection to pool
+                    conn.close()
+                else:
+                    # Close direct connection
+                    conn.close()
     
     def get_transactions(
         self, 
@@ -50,7 +70,14 @@ class MySQLDatabaseManager:
         offset: int = 0,
         category: Optional[str] = None,
         status: Optional[str] = None,
-        phone: Optional[str] = None
+        phone: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        min_amount: Optional[float] = None,
+        max_amount: Optional[float] = None,
+        transaction_type: Optional[str] = None,
+        sort_by: str = "date",
+        sort_order: str = "DESC"
     ) -> List[Dict[str, Any]]:
         """Get transactions with optional filters."""
         with self.get_connection() as conn:
@@ -98,6 +125,7 @@ class MySQLDatabaseManager:
             """
             params = []
             
+            # Basic filters
             if category:
                 query += " AND tc.category_name = %s"
                 params.append(category)
@@ -111,7 +139,47 @@ class MySQLDatabaseManager:
                 phone_pattern = f"%{phone}%"
                 params.extend([phone_pattern, phone_pattern])
             
-            query += " ORDER BY t.transaction_date DESC LIMIT %s OFFSET %s"
+            # Advanced filters
+            if start_date:
+                query += " AND DATE(t.transaction_date) >= %s"
+                params.append(start_date)
+            
+            if end_date:
+                query += " AND DATE(t.transaction_date) <= %s"
+                params.append(end_date)
+            
+            if min_amount is not None:
+                query += " AND t.amount >= %s"
+                params.append(min_amount)
+            
+            if max_amount is not None:
+                query += " AND t.amount <= %s"
+                params.append(max_amount)
+            
+            if transaction_type:
+                query += " AND t.transaction_type = %s"
+                params.append(transaction_type)
+            
+            # Sorting
+            valid_sort_fields = ["date", "amount", "status", "category", "phone"]
+            if sort_by in valid_sort_fields:
+                if sort_by == "date":
+                    sort_field = "t.transaction_date"
+                elif sort_by == "amount":
+                    sort_field = "t.amount"
+                elif sort_by == "status":
+                    sort_field = "t.status"
+                elif sort_by == "category":
+                    sort_field = "tc.category_name"
+                elif sort_by == "phone":
+                    sort_field = "su.phone_number"
+                
+                sort_direction = "ASC" if sort_order.upper() == "ASC" else "DESC"
+                query += f" ORDER BY {sort_field} {sort_direction}"
+            else:
+                query += " ORDER BY t.transaction_date DESC"
+            
+            query += " LIMIT %s OFFSET %s"
             params.extend([limit, offset])
             
             cursor.execute(query, params)
@@ -644,3 +712,89 @@ class MySQLDatabaseManager:
             cursor.close()
             
             return stats
+
+    def get_hourly_pattern(self) -> List[Dict[str, Any]]:
+        """Get hourly transaction pattern data."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor(dictionary=True)
+                
+                # Initialize hourly data with zeros
+                hourly_data = []
+                for hour in range(24):
+                    hourly_data.append({
+                        "hour": hour,
+                        "count": 0,
+                        "volume": 0
+                    })
+                
+                # Get actual hourly data from transactions
+                cursor.execute("""
+                    SELECT 
+                        HOUR(transaction_date) as hour,
+                        COUNT(*) as count,
+                        SUM(amount) as volume
+                    FROM transactions 
+                    WHERE transaction_date IS NOT NULL
+                    GROUP BY HOUR(transaction_date)
+                    ORDER BY hour
+                """)
+                
+                results = cursor.fetchall()
+                
+                # Update hourly data with actual values
+                for result in results:
+                    hour = result['hour']
+                    if 0 <= hour <= 23:
+                        hourly_data[hour]['count'] = result['count']
+                        hourly_data[hour]['volume'] = float(result['volume'] or 0)
+                
+                cursor.close()
+                return hourly_data
+        except Exception as e:
+            logger.error(f"Error getting hourly pattern: {e}")
+            return []
+
+    def get_amount_distribution(self) -> List[Dict[str, Any]]:
+        """Get amount distribution data for charts."""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor(dictionary=True)
+                
+                # Define amount ranges
+                amount_ranges = [
+                    {"range": "0-1,000", "min": 0, "max": 1000},
+                    {"range": "1,000-5,000", "min": 1000, "max": 5000},
+                    {"range": "5,000-10,000", "min": 5000, "max": 10000},
+                    {"range": "10,000-25,000", "min": 10000, "max": 25000},
+                    {"range": "25,000-50,000", "min": 25000, "max": 50000},
+                    {"range": "50,000+", "min": 50000, "max": 999999999}
+                ]
+                
+                distribution = []
+                
+                for range_info in amount_ranges:
+                    if range_info["max"] == 999999999:  # 50,000+ range
+                        cursor.execute("""
+                            SELECT COUNT(*) as count
+                            FROM transactions 
+                            WHERE amount >= %s
+                        """, (range_info["min"],))
+                    else:
+                        cursor.execute("""
+                            SELECT COUNT(*) as count
+                            FROM transactions 
+                            WHERE amount >= %s AND amount < %s
+                        """, (range_info["min"], range_info["max"]))
+                    
+                    result = cursor.fetchone()
+                    distribution.append({
+                        "amount_range": range_info["range"],
+                        "count": result['count']
+                    })
+                
+                cursor.close()
+                return distribution
+        except Exception as e:
+            logger.error(f"Error getting amount distribution: {e}")
+            return []

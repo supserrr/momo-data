@@ -64,10 +64,311 @@ let currentSort = {
     direction: 'desc' // 'asc' or 'desc'
 };
 
+// Helper function for authenticated API requests
+async function authenticatedFetch(url, options = {}) {
+    const defaultOptions = {
+        headers: {
+            'Authorization': 'Basic ' + btoa('admin:password'),
+            'Content-Type': 'application/json',
+            ...options.headers
+        }
+    };
+    
+    return fetch(url, { ...options, ...defaultOptions });
+}
+
+// WebSocket connection for real-time updates
+let wsConnection = null;
+let reconnectAttempts = 0;
+const maxReconnectAttempts = 5;
+
+function connectWebSocket() {
+    try {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/ws`;
+        
+        wsConnection = new WebSocket(wsUrl);
+        
+        wsConnection.onopen = function(event) {
+            console.log('WebSocket connected');
+            reconnectAttempts = 0;
+            updateRealTimeStatus(true);
+            
+            // Subscribe to updates
+            wsConnection.send(JSON.stringify({
+                type: 'subscribe',
+                subscriptions: ['dashboard', 'analytics', 'notifications']
+            }));
+        };
+        
+        wsConnection.onmessage = function(event) {
+            try {
+                const message = JSON.parse(event.data);
+                handleWebSocketMessage(message);
+            } catch (error) {
+                console.error('Error parsing WebSocket message:', error);
+            }
+        };
+        
+        wsConnection.onclose = function(event) {
+            console.log('WebSocket disconnected');
+            updateRealTimeStatus(false);
+            if (reconnectAttempts < maxReconnectAttempts) {
+                setTimeout(() => {
+                    reconnectAttempts++;
+                    console.log(`Attempting to reconnect WebSocket (${reconnectAttempts}/${maxReconnectAttempts})`);
+                    connectWebSocket();
+                }, 3000);
+            }
+        };
+        
+        wsConnection.onerror = function(error) {
+            console.error('WebSocket error:', error);
+        };
+    } catch (error) {
+        console.error('Error connecting to WebSocket:', error);
+    }
+}
+
+function handleWebSocketMessage(message) {
+    switch (message.type) {
+        case 'data_update':
+            console.log('Received data update:', message.data_type);
+            if (message.data_type === 'dashboard') {
+                updateDashboardFromWebSocket(message.data);
+            } else if (message.data_type === 'analytics') {
+                updateAnalyticsFromWebSocket(message.data);
+            }
+            break;
+        case 'notification':
+            showNotification(message.message, message.level);
+            break;
+        case 'subscription_confirmed':
+            console.log('WebSocket subscription confirmed:', message.subscriptions);
+            break;
+    }
+}
+
+function updateDashboardFromWebSocket(data) {
+    // Update dashboard with real-time data
+    if (data.summary) {
+        updateKeyMetrics({ summary: data.summary });
+    }
+    if (data.charts) {
+        updateCharts({ charts: data.charts });
+    }
+}
+
+function updateAnalyticsFromWebSocket(data) {
+    // Update analytics with real-time data
+    console.log('Updating analytics from WebSocket');
+    // Could trigger a refresh of analytics charts
+}
+
+function showNotification(message, level = 'info') {
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.className = `notification notification-${level}`;
+    notification.textContent = message;
+    
+    // Add to page
+    document.body.appendChild(notification);
+    
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.parentNode.removeChild(notification);
+        }
+    }, 5000);
+}
+
+// Initialize advanced features
+function initializeAdvancedFeatures() {
+    // Add advanced filtering
+    addAdvancedFilters();
+    
+    // Add real-time status indicator
+    addRealTimeStatus();
+}
+
+function addAdvancedFilters() {
+    // Add advanced filtering controls
+    const filterContainer = document.createElement('div');
+    filterContainer.className = 'advanced-filters';
+    filterContainer.innerHTML = `
+        <h3>Advanced Filters</h3>
+        <div class="filter-row">
+            <input type="date" id="startDate" placeholder="Start Date">
+            <input type="date" id="endDate" placeholder="End Date">
+            <input type="number" id="minAmount" placeholder="Min Amount">
+            <input type="number" id="maxAmount" placeholder="Max Amount">
+            <select id="transactionType">
+                <option value="">All Types</option>
+                <option value="deposit">Deposit</option>
+                <option value="withdrawal">Withdrawal</option>
+                <option value="transfer">Transfer</option>
+            </select>
+            <button onclick="applyAdvancedFilters()" class="btn btn-primary">Apply Filters</button>
+            <button onclick="clearAdvancedFilters()" class="btn btn-secondary">Clear</button>
+        </div>
+    `;
+    
+    // Insert before the transactions table
+    const tableSection = document.querySelector('.transactions-section');
+    if (tableSection) {
+        tableSection.parentNode.insertBefore(filterContainer, tableSection);
+    }
+}
+
+function addRealTimeStatus() {
+    // Add real-time status indicator
+    const statusContainer = document.createElement('div');
+    statusContainer.className = 'realtime-status';
+    statusContainer.innerHTML = `
+        <div class="status-indicator">
+            <span class="status-dot" id="statusDot"></span>
+            <span id="statusText">Connecting...</span>
+        </div>
+    `;
+    
+    // Insert at the top of the page
+    const header = document.querySelector('header');
+    if (header) {
+        header.appendChild(statusContainer);
+    }
+}
+
+// Export functionality
+async function exportData(dataType, format) {
+    try {
+        console.log(`Exporting ${dataType} as ${format}`);
+        
+        let url = `http://127.0.0.1:8000/api/advanced/export/${dataType}?format_type=${format}`;
+        
+        const response = await authenticatedFetch(url);
+        
+        if (!response.ok) {
+            throw new Error(`Export failed: ${response.status}`);
+        }
+        
+        if (format === 'json') {
+            const data = await response.json();
+            downloadJSON(data, `${dataType}_export.json`);
+        } else {
+            const blob = await response.blob();
+            downloadBlob(blob, `${dataType}_export.${format}`);
+        }
+        
+        showNotification(`Successfully exported ${dataType} as ${format}`, 'success');
+    } catch (error) {
+        console.error('Export error:', error);
+        showNotification(`Export failed: ${error.message}`, 'error');
+    }
+}
+
+function downloadJSON(data, filename) {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    downloadBlob(blob, filename);
+}
+
+function downloadBlob(blob, filename) {
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+}
+
+// Advanced filtering
+async function applyAdvancedFilters() {
+    try {
+        const filters = {
+            start_date: document.getElementById('startDate')?.value,
+            end_date: document.getElementById('endDate')?.value,
+            min_amount: document.getElementById('minAmount')?.value,
+            max_amount: document.getElementById('maxAmount')?.value,
+            transaction_type: document.getElementById('transactionType')?.value
+        };
+        
+        // Remove empty filters
+        Object.keys(filters).forEach(key => {
+            if (!filters[key]) delete filters[key];
+        });
+        
+        console.log('Applying advanced filters:', filters);
+        
+        // Build query string
+        const params = new URLSearchParams();
+        Object.keys(filters).forEach(key => {
+            params.append(key, filters[key]);
+        });
+        
+        const url = `http://127.0.0.1:8000/api/advanced/transactions/advanced?${params.toString()}`;
+        const response = await authenticatedFetch(url);
+        
+        if (!response.ok) {
+            throw new Error(`Filter request failed: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            // Update the transactions table with filtered data
+            allTransactions = result.data;
+            filteredTransactions = [...allTransactions];
+            currentPage = 1;
+            totalPages = Math.ceil(allTransactions.length / pageSize);
+            updateTransactionsTable();
+            
+            showNotification(`Found ${result.data.length} transactions matching filters`, 'success');
+        } else {
+            throw new Error(result.message || 'Filter request failed');
+        }
+    } catch (error) {
+        console.error('Advanced filter error:', error);
+        showNotification(`Filter failed: ${error.message}`, 'error');
+    }
+}
+
+function clearAdvancedFilters() {
+    // Clear all filter inputs
+    document.getElementById('startDate').value = '';
+    document.getElementById('endDate').value = '';
+    document.getElementById('minAmount').value = '';
+    document.getElementById('maxAmount').value = '';
+    document.getElementById('transactionType').value = '';
+    
+    // Reload all transactions
+    loadDashboardData();
+    showNotification('Filters cleared', 'info');
+}
+
+
+// Update real-time status
+function updateRealTimeStatus(connected) {
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+    
+    if (statusDot && statusText) {
+        if (connected) {
+            statusDot.className = 'status-dot connected';
+            statusText.textContent = 'Real-time Connected';
+        } else {
+            statusDot.className = 'status-dot disconnected';
+            statusText.textContent = 'Real-time Disconnected';
+        }
+    }
+}
+
 // Initialize dashboard on DOM load
 document.addEventListener('DOMContentLoaded', function() {
     loadDashboardData();
     initializeFilters();
+    initializeAdvancedFeatures();
+    connectWebSocket();
     
     // Add load more button event listener
     // Pagination event listeners
@@ -96,6 +397,7 @@ async function loadDashboardData() {
         console.log('Loading dashboard data from dedicated API endpoints...');
         
         // Load all data in parallel from dedicated endpoints
+        console.log('Starting parallel API calls...');
         const [
             summaryData,
             monthlyStats,
@@ -113,6 +415,7 @@ async function loadDashboardData() {
             loadAmountDistribution(),
             loadTransactionsForTable()
         ]);
+        console.log('All parallel API calls completed successfully');
         
         console.log('All data loaded successfully:', {
             summary: summaryData,
@@ -151,6 +454,11 @@ async function loadDashboardData() {
         
     } catch (error) {
         console.error('Error loading dashboard data:', error);
+        console.error('Error details:', {
+            message: error.message,
+            stack: error.stack,
+            name: error.name
+        });
         // Show error message instead of sample data
         showErrorMessage('Unable to load data from API. Please check your connection and try again.');
         
@@ -181,7 +489,7 @@ async function loadDashboardData() {
 async function loadSummaryData() {
     try {
         console.log('Fetching summary data...');
-        const response = await fetch('http://localhost:8001/api/dashboard-data');
+        const response = await authenticatedFetch('http://127.0.0.1:8000/api/dashboard/data');
         if (!response.ok) {
             throw new Error(`API error: ${response.status}`);
         }
@@ -197,11 +505,14 @@ async function loadSummaryData() {
 async function loadMonthlyStats() {
     try {
         console.log('Fetching monthly stats...');
-        const response = await fetch('http://localhost:8001/api/monthly-stats');
+        const response = await authenticatedFetch('http://127.0.0.1:8000/api/analytics/monthly');
         if (!response.ok) {
             throw new Error(`API error: ${response.status}`);
         }
-        return await response.json();
+        const data = await response.json();
+        // The API returns {monthly_stats: [...], hourly_pattern: [...]}
+        // We need just the monthly_stats array
+        return data.monthly_stats || [];
     } catch (error) {
         console.warn('Error fetching monthly stats:', error);
         return [];
@@ -212,7 +523,7 @@ async function loadMonthlyStats() {
 async function loadCategoryDistribution() {
     try {
         console.log('Fetching category distribution...');
-        const response = await fetch('http://localhost:8001/api/category-distribution');
+        const response = await authenticatedFetch('http://127.0.0.1:8000/api/categories/');
         if (!response.ok) {
             throw new Error(`API error: ${response.status}`);
         }
@@ -227,7 +538,7 @@ async function loadCategoryDistribution() {
 async function loadHourlyPattern() {
     try {
         console.log('Fetching hourly pattern...');
-        const response = await fetch('http://localhost:8001/api/hourly-pattern');
+        const response = await authenticatedFetch('http://127.0.0.1:8000/api/analytics/hourly-pattern');
         if (!response.ok) {
             throw new Error(`API error: ${response.status}`);
         }
@@ -242,7 +553,7 @@ async function loadHourlyPattern() {
 async function loadAmountDistribution() {
     try {
         console.log('Fetching amount distribution...');
-        const response = await fetch('http://localhost:8001/api/amount-distribution');
+        const response = await authenticatedFetch('http://127.0.0.1:8000/api/analytics/amount-distribution');
         if (!response.ok) {
             throw new Error(`API error: ${response.status}`);
         }
@@ -266,7 +577,7 @@ async function loadTransactionsForTable() {
         while (hasMore && consecutiveErrors < 3) {
             try {
                 console.log(`Fetching transactions: offset=${offset}, limit=${limit}`);
-                const response = await fetch(`http://localhost:8001/api/transactions?limit=${limit}&offset=${offset}`);
+                const response = await authenticatedFetch(`http://127.0.0.1:8000/api/transactions/?limit=${limit}&offset=${offset}`);
                 if (!response.ok) {
                     throw new Error(`API error: ${response.status}`);
                 }
@@ -321,7 +632,7 @@ async function loadAllTransactions() {
         while (hasMore && consecutiveErrors < 3) {
             try {
                 console.log(`Fetching transactions: offset=${offset}, limit=${limit}`);
-                const transactionsResponse = await fetch(`http://localhost:8001/api/transactions?limit=${limit}&offset=${offset}`);
+                const transactionsResponse = await authenticatedFetch(`http://127.0.0.1:8000/api/transactions/?limit=${limit}&offset=${offset}`);
                 console.log(`Response status: ${transactionsResponse.status}`);
                 if (!transactionsResponse.ok) {
                     console.warn(`API error at offset ${offset}, stopping pagination`);
@@ -369,7 +680,7 @@ async function loadAllTransactions() {
 async function loadTransactionTypesByAmount() {
     try {
         console.log('Fetching transaction types by amount...');
-        const response = await fetch('http://localhost:8001/api/transaction-types-by-amount');
+        const response = await authenticatedFetch('http://127.0.0.1:8000/api/analytics/transaction-types-by-amount');
         console.log(`Response status: ${response.status}`);
         
         if (!response.ok) {
@@ -1811,7 +2122,7 @@ async function viewTransactionDetails(transactionId) {
     // Fetch comprehensive transaction details from the API
     try {
         console.log('Fetching detailed transaction data for ID:', transaction.id);
-        const response = await fetch(`http://localhost:8001/api/transactions/${transaction.id}/details`);
+        const response = await authenticatedFetch(`http://127.0.0.1:8000/api/transactions/${transaction.id}/details`);
         if (!response.ok) {
             throw new Error(`API error: ${response.status}`);
         }

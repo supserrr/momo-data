@@ -5,6 +5,7 @@ Transactions Router
 from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import List, Optional
 from ..db import MySQLDatabaseManager
+from ..auth import get_current_user
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
 
@@ -18,7 +19,8 @@ async def get_transactions(
     category: Optional[str] = None,
     status: Optional[str] = None,
     phone: Optional[str] = None,
-    db: MySQLDatabaseManager = Depends(get_db_manager)
+    db: MySQLDatabaseManager = Depends(get_db_manager),
+    current_user: str = Depends(get_current_user)
 ):
     """Get transactions with optional filters."""
     try:
@@ -36,7 +38,8 @@ async def get_transactions(
 @router.get("/{transaction_id}")
 async def get_transaction(
     transaction_id: int,
-    db: MySQLDatabaseManager = Depends(get_db_manager)
+    db: MySQLDatabaseManager = Depends(get_db_manager),
+    current_user: str = Depends(get_current_user)
 ):
     """Get a specific transaction by ID."""
     try:
@@ -52,7 +55,8 @@ async def get_transaction(
 @router.get("/{transaction_id}/details")
 async def get_transaction_details(
     transaction_id: int,
-    db: MySQLDatabaseManager = Depends(get_db_manager)
+    db: MySQLDatabaseManager = Depends(get_db_manager),
+    current_user: str = Depends(get_current_user)
 ):
     """Get comprehensive transaction details with all parsed fields from the original message."""
     try:

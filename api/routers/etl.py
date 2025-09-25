@@ -4,6 +4,7 @@ ETL Router
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from ..db import MySQLDatabaseManager
+from ..auth import get_current_user
 
 router = APIRouter(prefix="/etl", tags=["etl"])
 
@@ -13,7 +14,8 @@ def get_db_manager():
 @router.get("/logs")
 async def get_etl_logs(
     limit: int = Query(50, ge=1, le=1000),
-    db: MySQLDatabaseManager = Depends(get_db_manager)
+    db: MySQLDatabaseManager = Depends(get_db_manager),
+    current_user: str = Depends(get_current_user)
 ):
     """Get recent ETL process logs."""
     try:

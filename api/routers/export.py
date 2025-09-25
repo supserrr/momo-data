@@ -4,6 +4,7 @@ Export Router
 
 from fastapi import APIRouter, Depends, HTTPException
 from ..db import MySQLDatabaseManager
+from ..auth import get_current_user
 
 router = APIRouter(prefix="/export", tags=["export"])
 
@@ -12,7 +13,8 @@ def get_db_manager():
 
 @router.get("/stats")
 async def get_database_stats(
-    db: MySQLDatabaseManager = Depends(get_db_manager)
+    db: MySQLDatabaseManager = Depends(get_db_manager),
+    current_user: str = Depends(get_current_user)
 ):
     """Get database statistics."""
     try:

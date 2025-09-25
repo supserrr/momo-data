@@ -8,16 +8,17 @@ from pathlib import Path
 from typing import List, Optional
 from datetime import datetime
 
-from fastapi import FastAPI, HTTPException, Request, Depends
+from fastapi import FastAPI, HTTPException, Request, Depends, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
+import json
 
 # Import configuration
-from .config import settings, API_ROUTERS, RESPONSE_TEMPLATES, ERROR_CODES
+from .config import settings
 
 # Import routers
 from .routers import (
@@ -30,24 +31,29 @@ from .routers import (
     export_router,
     health_router
 )
+from .routers.dsa import router as dsa_router
+from .routers.advanced import router as advanced_router
+from .auth import get_current_user, get_current_user_with_auto_auth
+from .websocket import manager, initialize_realtime_updater
+from .config import settings
 
 # Import database manager
 from .db import MySQLDatabaseManager
 
 # Setup logging
 logging.basicConfig(
-    level=getattr(logging, settings.log_level.upper()),
-    format=settings.log_format
+    level=getattr(logging, settings.LOG_LEVEL.upper()),
+    format=settings.LOG_FORMAT
 )
 logger = logging.getLogger(__name__)
 
 # Initialize FastAPI app with configuration
 app = FastAPI(
-    title=settings.title,
-    description=settings.description,
-    version=settings.version,
-    docs_url=settings.docs_url,
-    redoc_url=settings.redoc_url,
+    title=settings.TITLE,
+    description=settings.DESCRIPTION,
+    version=settings.VERSION,
+    docs_url=settings.DOCS_URL,
+    redoc_url=settings.REDOC_URL,
     openapi_tags=[
         {"name": "transactions", "description": "Transaction management and operations"},
         {"name": "analytics", "description": "Analytics and reporting operations"},
@@ -57,6 +63,8 @@ app = FastAPI(
         {"name": "search", "description": "Search and filtering operations"},
         {"name": "export", "description": "Data export operations"},
         {"name": "health", "description": "System health monitoring"},
+        {"name": "dsa", "description": "Data Structures and Algorithms"},
+        {"name": "advanced", "description": "Advanced features and real-time updates"},
     ]
 )
 
@@ -69,10 +77,10 @@ app.add_middleware(
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_credentials=settings.cors_allow_credentials,
-    allow_methods=settings.cors_allow_methods,
-    allow_headers=settings.cors_allow_headers,
+    allow_origins=settings.CORS_ORIGINS,
+    allow_credentials=settings.CORS_ALLOW_CREDENTIALS,
+    allow_methods=settings.CORS_ALLOW_METHODS,
+    allow_headers=settings.CORS_ALLOW_HEADERS,
 )
 
 # Initialize database manager
@@ -156,25 +164,32 @@ async def serve_frontend():
     """Serve main dashboard"""
     return FileResponse("index.html")
 
+# Initialize real-time updater
+realtime_updater = initialize_realtime_updater(db_manager)
+
 # Include all routers
-app.include_router(transactions_router, prefix=settings.api_prefix)
-app.include_router(analytics_router, prefix=settings.api_prefix)
-app.include_router(dashboard_router, prefix=settings.api_prefix)
-app.include_router(etl_router, prefix=settings.api_prefix)
-app.include_router(categories_router, prefix=settings.api_prefix)
-app.include_router(search_router, prefix=settings.api_prefix)
-app.include_router(export_router, prefix=settings.api_prefix)
-app.include_router(health_router, prefix=settings.api_prefix)
+app.include_router(transactions_router, prefix=settings.API_PREFIX)
+app.include_router(analytics_router, prefix=settings.API_PREFIX)
+app.include_router(dashboard_router, prefix=settings.API_PREFIX)
+app.include_router(etl_router, prefix=settings.API_PREFIX)
+app.include_router(categories_router, prefix=settings.API_PREFIX)
+app.include_router(search_router, prefix=settings.API_PREFIX)
+app.include_router(export_router, prefix=settings.API_PREFIX)
+app.include_router(health_router, prefix=settings.API_PREFIX)
+app.include_router(dsa_router, prefix=settings.API_PREFIX)
+app.include_router(advanced_router, prefix=settings.API_PREFIX)
 
 # Legacy endpoints for backward compatibility
 @app.get("/api/transactions", include_in_schema=False)
 async def legacy_get_transactions(
+    request: Request,
     limit: int = 100,
     offset: int = 0,
     category: Optional[str] = None,
     status: Optional[str] = None,
     phone: Optional[str] = None,
-    db: MySQLDatabaseManager = Depends(get_db_manager)
+    db: MySQLDatabaseManager = Depends(get_db_manager),
+    current_user: str = Depends(get_current_user_with_auto_auth)
 ):
     """Legacy transaction endpoint for backward compatibility"""
     try:
@@ -192,7 +207,9 @@ async def legacy_get_transactions(
 
 @app.get("/api/dashboard-data", include_in_schema=False)
 async def legacy_get_dashboard_data(
-    db: MySQLDatabaseManager = Depends(get_db_manager)
+    request: Request,
+    db: MySQLDatabaseManager = Depends(get_db_manager),
+    current_user: str = Depends(get_current_user_with_auto_auth)
 ):
     """Legacy dashboard data endpoint for backward compatibility"""
     try:
@@ -204,11 +221,13 @@ async def legacy_get_dashboard_data(
 
 @app.get("/api/analytics", include_in_schema=False)
 async def legacy_get_analytics(
-    db: MySQLDatabaseManager = Depends(get_db_manager)
+    request: Request,
+    db: MySQLDatabaseManager = Depends(get_db_manager),
+    current_user: str = Depends(get_current_user_with_auto_auth)
 ):
     """Legacy analytics endpoint for backward compatibility"""
     try:
-        analytics_data = db.get_analytics_data()
+        analytics_data = db.get_analytics()
         return analytics_data
     except Exception as e:
         logger.error(f"Error fetching analytics data: {e}")
@@ -216,7 +235,9 @@ async def legacy_get_analytics(
 
 @app.get("/api/transaction-types-by-amount", include_in_schema=False)
 async def legacy_get_transaction_types_by_amount(
-    db: MySQLDatabaseManager = Depends(get_db_manager)
+    request: Request,
+    db: MySQLDatabaseManager = Depends(get_db_manager),
+    current_user: str = Depends(get_current_user_with_auto_auth)
 ):
     """Legacy transaction types by amount endpoint for backward compatibility"""
     try:
@@ -228,7 +249,9 @@ async def legacy_get_transaction_types_by_amount(
 
 @app.get("/api/monthly-stats", include_in_schema=False)
 async def legacy_get_monthly_stats(
-    db: MySQLDatabaseManager = Depends(get_db_manager)
+    request: Request,
+    db: MySQLDatabaseManager = Depends(get_db_manager),
+    current_user: str = Depends(get_current_user_with_auto_auth)
 ):
     """Legacy monthly stats endpoint for backward compatibility"""
     try:
@@ -240,7 +263,9 @@ async def legacy_get_monthly_stats(
 
 @app.get("/api/category-distribution", include_in_schema=False)
 async def legacy_get_category_distribution(
-    db: MySQLDatabaseManager = Depends(get_db_manager)
+    request: Request,
+    db: MySQLDatabaseManager = Depends(get_db_manager),
+    current_user: str = Depends(get_current_user_with_auto_auth)
 ):
     """Legacy category distribution endpoint for backward compatibility"""
     try:
@@ -252,7 +277,9 @@ async def legacy_get_category_distribution(
 
 @app.get("/api/hourly-pattern", include_in_schema=False)
 async def legacy_get_hourly_pattern(
-    db: MySQLDatabaseManager = Depends(get_db_manager)
+    request: Request,
+    db: MySQLDatabaseManager = Depends(get_db_manager),
+    current_user: str = Depends(get_current_user_with_auto_auth)
 ):
     """Legacy hourly pattern endpoint for backward compatibility"""
     try:
@@ -264,7 +291,9 @@ async def legacy_get_hourly_pattern(
 
 @app.get("/api/amount-distribution", include_in_schema=False)
 async def legacy_get_amount_distribution(
-    db: MySQLDatabaseManager = Depends(get_db_manager)
+    request: Request,
+    db: MySQLDatabaseManager = Depends(get_db_manager),
+    current_user: str = Depends(get_current_user_with_auto_auth)
 ):
     """Legacy amount distribution endpoint for backward compatibility"""
     try:
@@ -279,8 +308,8 @@ async def legacy_get_amount_distribution(
 async def startup_event():
     """Application startup event"""
     logger.info("Starting MoMo Data Processing API...")
-    logger.info(f"API Version: {settings.version}")
-    logger.info(f"Database: {settings.database_host}:{settings.database_port}/{settings.database_name}")
+    logger.info(f"API Version: {settings.VERSION}")
+    logger.info(f"Database: {settings.DB_HOST}:{settings.DB_PORT}/{settings.DB_NAME}")
     
     # Test database connection
     try:
@@ -323,6 +352,34 @@ async def get_api_info():
             "redoc": "/redoc"
         }
     }
+
+# WebSocket endpoint for real-time updates
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    """WebSocket endpoint for real-time updates."""
+    await manager.connect(websocket)
+    try:
+        while True:
+            # Keep connection alive and handle incoming messages
+            data = await websocket.receive_text()
+            try:
+                message = json.loads(data)
+                if message.get("type") == "subscribe":
+                    # Handle subscription requests
+                    subscriptions = message.get("subscriptions", ["all"])
+                    manager.connection_subscriptions[websocket] = set(subscriptions)
+                    await manager.send_personal_message(
+                        json.dumps({
+                            "type": "subscription_confirmed",
+                            "subscriptions": list(subscriptions)
+                        }),
+                        websocket
+                    )
+            except json.JSONDecodeError:
+                # Handle non-JSON messages
+                pass
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
 
 if __name__ == "__main__":
     import uvicorn
