@@ -182,14 +182,18 @@ def create_pdf_report():
     
     endpoints_data = [
         ['Method', 'Endpoint', 'Description', 'Auth Required'],
-        ['GET', '/transactions', 'List all transactions', 'Yes'],
-        ['GET', '/transactions/{id}', 'Get specific transaction', 'Yes'],
-        ['POST', '/transactions', 'Create new transaction', 'Yes'],
-        ['PUT', '/transactions/{id}', 'Update transaction', 'Yes'],
-        ['DELETE', '/transactions/{id}', 'Delete transaction', 'Yes'],
+        ['GET', '/api/transactions', 'List all transactions with filtering', 'Yes'],
+        ['GET', '/api/transactions/{id}', 'Get specific transaction', 'Yes'],
+        ['POST', '/api/transactions', 'Create new transaction', 'Yes'],
+        ['PUT', '/api/transactions/{id}', 'Update transaction', 'Yes'],
+        ['DELETE', '/api/transactions/{id}', 'Delete transaction', 'Yes'],
+        ['GET', '/api/search', 'Search transactions', 'Yes'],
+        ['GET', '/api/dashboard-data', 'Get dashboard summary', 'Yes'],
+        ['GET', '/api/analytics', 'Get analytics data', 'Yes'],
         ['GET', '/dsa/linear-search', 'Linear search demo', 'Yes'],
         ['GET', '/dsa/dictionary-lookup', 'Dictionary lookup demo', 'Yes'],
-        ['GET', '/dsa/comparison', 'Performance comparison', 'Yes']
+        ['GET', '/dsa/comparison', 'Performance comparison', 'Yes'],
+        ['GET', '/api/health', 'Health check', 'No']
     ]
     
     endpoints_table = Table(endpoints_data, colWidths=[0.8*inch, 2*inch, 2.2*inch, 0.8*inch])
@@ -217,7 +221,7 @@ def create_pdf_report():
     story.append(Paragraph(example_text, body_style))
     
     curl_example = """
-    curl -u admin:password http://localhost:8080/transactions
+    curl -u admin:password http://localhost:8080/api/transactions
     """
     story.append(Paragraph(curl_example, code_style))
     
@@ -227,11 +231,21 @@ def create_pdf_report():
     story.append(Paragraph(example_text2, body_style))
     
     post_example = """
-    curl -u admin:password -X POST http://localhost:8080/transactions \\
+    curl -u admin:password -X POST http://localhost:8080/api/transactions \\
       -H "Content-Type: application/json" \\
       -d '{"amount": 1000, "currency": "RWF", "transaction_type": "TRANSFER"}'
     """
     story.append(Paragraph(post_example, code_style))
+    
+    example_text3 = """
+    <b>DSA Performance Comparison:</b>
+    """
+    story.append(Paragraph(example_text3, body_style))
+    
+    dsa_example = """
+    curl -u admin:password http://localhost:8080/dsa/comparison
+    """
+    story.append(Paragraph(dsa_example, code_style))
     
     story.append(PageBreak())
     
@@ -278,20 +292,26 @@ def create_pdf_report():
     results_text = """
     Our performance testing with 20 random transaction lookups showed the following results:
     
-    <b>Linear Search:</b>
+    <b>Linear Search (O(n) complexity):</b>
     • Average execution time: 0.156ms
-    • Total comparisons: 20 (one per transaction)
-    • Performance degrades linearly with dataset size
+    • Time complexity: O(n) where n is the number of transactions
+    • Space complexity: O(1)
+    • Best case: O(1) - element at first position
+    • Worst case: O(n) - element at last position or not found
+    • Average case: O(n/2)
     
-    <b>Dictionary Lookup:</b>
+    <b>Dictionary Lookup (O(1) complexity):</b>
     • Average execution time: 0.045ms
-    • Total comparisons: 20 (constant time per lookup)
-    • Performance remains constant regardless of dataset size
+    • Time complexity: O(1) average case, O(n) worst case (hash collisions)
+    • Space complexity: O(n) - requires additional memory for hash table
+    • Best case: O(1) - no collisions
+    • Worst case: O(n) - all elements hash to same bucket
+    • Average case: O(1)
     
     <b>Performance Improvement:</b>
     Dictionary lookup was approximately 3.47x faster than linear search for our test dataset. 
-    This performance gap would increase significantly with larger datasets, making dictionary 
-    lookup the preferred choice for production systems.
+    Dictionary lookup is typically 3-5x faster than linear search for datasets with 20+ records, 
+    with the performance gap increasing significantly as dataset size grows.
     """
     
     story.append(Paragraph(results_text, body_style))
@@ -305,14 +325,18 @@ def create_pdf_report():
     algorithmic approaches:
     
     <b>Linear Search:</b> Must examine each element sequentially until the target is found. 
-    In the worst case, it examines every element in the dataset.
+    In the worst case, it examines every element in the dataset. Performance degrades 
+    linearly with dataset size.
     
     <b>Dictionary Lookup:</b> Uses a hash function to directly compute the memory location 
-    of the target element, providing constant-time access on average.
+    of the target element, providing constant-time access on average. Performance remains 
+    constant regardless of dataset size.
     
     <b>Alternative Data Structures:</b> For even better performance in production systems, 
     consider implementing Binary Search Trees (O(log n)) or B-Trees for database indexing, 
-    which provide excellent performance for large, sorted datasets.
+    which provide excellent performance for large, sorted datasets. For production systems 
+    with large datasets, use hash tables or database indexes for O(1) or O(log n) lookup 
+    performance instead of linear search.
     """
     
     story.append(Paragraph(explanation_text, body_style))
@@ -374,6 +398,10 @@ def create_pdf_report():
     
     <b>6. Stateless but Insecure:</b> While stateless, the security model is fundamentally 
     weak compared to modern alternatives.
+    
+    <b>7. No Encryption of Credentials:</b> Credentials are not encrypted during transmission.
+    
+    <b>8. Single Factor Authentication Only:</b> No additional security layers beyond username/password.
     """
     
     story.append(Paragraph(limitations_text, body_style))
@@ -383,20 +411,20 @@ def create_pdf_report():
     story.append(Paragraph("4.3 Stronger Authentication Alternatives", subheading_style))
     
     alternatives_text = """
-    <b>JWT (JSON Web Tokens):</b> Stateless, secure token-based authentication with built-in 
-    expiration and digital signatures.
+    <b>1. JWT (JSON Web Tokens):</b> Stateless, secure token-based authentication with built-in 
+    expiration and digital signatures. Provides secure, scalable authentication.
     
-    <b>OAuth 2.0:</b> Industry standard for authorization, supporting multiple grant types 
-    and third-party authentication.
+    <b>2. OAuth 2.0:</b> Industry standard for authorization, supporting multiple grant types 
+    and third-party authentication. Widely adopted for secure API access.
     
-    <b>API Keys:</b> Unique, revocable keys for each client with configurable permissions 
-    and rate limiting.
+    <b>3. API Keys:</b> Unique, revocable keys for each client with configurable permissions 
+    and rate limiting. Simple to implement and manage.
     
-    <b>Certificate-based Authentication:</b> Mutual TLS authentication using digital 
-    certificates for maximum security.
+    <b>4. Certificate-based Authentication:</b> Mutual TLS authentication using digital 
+    certificates for maximum security. Provides strong authentication and encryption.
     
-    <b>Multi-Factor Authentication (MFA):</b> Additional security layers including SMS, 
-    email, or hardware tokens.
+    <b>5. Multi-Factor Authentication (MFA):</b> Additional security layers including SMS, 
+    email, or hardware tokens. Significantly improves security posture.
     """
     
     story.append(Paragraph(alternatives_text, body_style))
@@ -416,16 +444,26 @@ def create_pdf_report():
     story.append(Paragraph("5.1 Immediate Security Improvements", subheading_style))
     
     immediate_text = """
-    <b>1. Implement HTTPS:</b> Encrypt all communications using TLS/SSL certificates.
+    <b>1. Use HTTPS:</b> Encrypt all communications using TLS/SSL certificates to protect 
+    data in transit.
     
-    <b>2. Replace Basic Auth with JWT:</b> Implement token-based authentication with 
-    expiration and refresh mechanisms.
+    <b>2. Implement JWT:</b> Replace Basic Auth with token-based authentication with 
+    expiration and refresh mechanisms for better security.
     
-    <b>3. Add Rate Limiting:</b> Implement request throttling to prevent abuse and DoS attacks.
+    <b>3. Rate Limiting:</b> Implement request throttling to prevent abuse and DoS attacks, 
+    protecting against malicious usage.
     
-    <b>4. Input Validation:</b> Sanitize and validate all input data to prevent injection attacks.
+    <b>4. Input Validation:</b> Sanitize and validate all inputs to prevent injection attacks 
+    and ensure data integrity.
     
-    <b>5. CORS Configuration:</b> Restrict cross-origin requests to trusted domains only.
+    <b>5. Audit Logging:</b> Track all API access and operations for security monitoring 
+    and compliance.
+    
+    <b>6. CORS Configuration:</b> Restrict cross-origin requests to trusted domains only 
+    to prevent unauthorized access.
+    
+    <b>7. API Versioning:</b> Maintain backward compatibility while allowing security updates 
+    and improvements.
     """
     
     story.append(Paragraph(immediate_text, body_style))
