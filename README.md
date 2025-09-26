@@ -69,7 +69,7 @@ This system processes XML-formatted SMS data from mobile money services, cleans 
 3. **Setup MySQL database**
    ```bash
    # Create database and run setup script
-   mysql -u root -p < database/setup.sql
+   mysql -u root -p < database/database_setup.sql
    ```
 
 4. **Configure environment**
@@ -83,9 +83,9 @@ This system processes XML-formatted SMS data from mobile money services, cleans 
    ./scripts/run_etl.sh
    ```
 
-6. **Start the web server**
+6. **Start the API server**
    ```bash
-   ./scripts/serve_frontend.sh
+   ./scripts/start_server.sh
    ```
 
 7. **Open the dashboard**
@@ -94,7 +94,7 @@ This system processes XML-formatted SMS data from mobile money services, cleans 
 ## Project Structure
 
 ```
-├── README.md                    # This file
+├── README.md                    # Project documentation
 ├── env.example                  # Environment configuration template
 ├── requirements.txt             # Python dependencies
 ├── index.html                   # Web dashboard entry point
@@ -118,38 +118,38 @@ This system processes XML-formatted SMS data from mobile money services, cleans 
 │   └── migrate_to_enhanced.sql
 ├── docs/                        # Documentation
 │   ├── ERD_Documentation.md   # ERD design documentation
-│   └── ERD.png                # Entity Relationship Diagram
+│   ├── ERD.png                # Entity Relationship Diagram
+│   ├── api_docs.md            # API documentation
+│   └── API_Security_Report.pdf # Security analysis report
 ├── examples/                    # JSON schema examples
 │   ├── complete_transaction_example.json # Transaction with relations
 │   ├── json_schema_mapping.md # SQL to JSON mapping documentation
 │   └── json_schemas.json      # All JSON schemas
 ├── etl/                         # ETL pipeline
 │   ├── config.py              # Configuration settings
-│   ├── parser.py              # Enhanced transaction parser
+│   ├── parser.py              # Transaction parser
 │   ├── loader.py              # Database operations
 │   ├── file_tracker.py        # File processing tracking
 │   └── run.py                 # Main ETL runner
-├── api/                         # FastAPI application
-│   ├── app.py                 # FastAPI application
-│   ├── app_old.py             # Previous version
+├── dsa/                         # Data Structures & Algorithms
+│   ├── data_structures.py     # Data structure implementations
+│   ├── search_comparison.py   # Search algorithm comparisons
+│   └── sorting_comparison.py  # Sorting algorithm comparisons
+├── api/                         # API server
+│   ├── momo_api_server.py     # Main API server
 │   ├── config.py              # API configuration
 │   ├── db.py                  # Database helpers
-│   ├── schemas.py             # Pydantic models
-│   └── routers/               # API route modules
-│       ├── analytics.py
-│       ├── categories.py
-│       ├── dashboard.py
-│       ├── etl.py
-│       ├── export.py
-│       ├── health.py
-│       ├── search.py
-│       └── transactions.py
+│   └── schemas.py             # Pydantic models
 ├── scripts/                     # Utility scripts
+│   ├── start_server.sh        # Start API server
 │   ├── run_etl.sh             # ETL execution script
 │   ├── export_json.sh         # JSON export script
-│   └── serve_frontend.sh      # Frontend server script
+│   ├── generate_pdf_report.py # PDF report generator
+│   ├── run_unified_rest_api.sh # Unified API server script
+│   └── test_api.sh            # API testing script
 └── tests/                       # Test suite
-    └── (test files removed - using enhanced parser)
+    ├── test_auth.py           # Authentication tests
+    └── test_dsa.py            # DSA algorithm tests
 ```
 
 ## Features
@@ -167,9 +167,12 @@ This system processes XML-formatted SMS data from mobile money services, cleans 
 - **Real-time Updates**: Dashboard refreshes with new data
 
 ### API
-- **RESTful Endpoints**: API for data access
+- **RESTful Endpoints**: Complete CRUD operations for transactions
+- **Authentication**: Basic Auth with admin:password
 - **JSON Responses**: Structured data in JSON format
 - **Pagination**: Data retrieval for large datasets
+- **DSA Integration**: Algorithm performance comparisons
+- **Export Functionality**: JSON and CSV data export
 
 ## Configuration
 
@@ -209,9 +212,13 @@ python etl/run.py --xml data/raw/momo.xml
 
 ### Starting the API Server
 
-Run the FastAPI server:
+Start the API server:
 ```bash
-python api/app.py
+# Using the startup script (recommended)
+./scripts/start_server.sh
+
+# Or directly with Python
+python3 api/momo_api_server.py --port 8000
 ```
 
 ### Exporting Data
@@ -220,6 +227,59 @@ Export processed data to JSON:
 ```bash
 ./scripts/export_json.sh
 ```
+
+### API Endpoints
+
+The API provides REST endpoints:
+
+#### Authentication
+- **Method**: Basic Authentication
+- **Credentials**: `admin:password`
+
+#### Transaction Endpoints
+- `GET /api/transactions` - List all transactions with pagination
+- `GET /api/transactions/{id}` - Get specific transaction by ID
+- `POST /api/transactions` - Create new transaction
+- `PUT /api/transactions/{id}` - Update existing transaction
+- `DELETE /api/transactions/{id}` - Delete transaction
+
+#### Analytics Endpoints
+- `GET /api/dashboard-data` - Dashboard summary statistics
+- `GET /api/analytics` - Detailed analytics data
+- `GET /api/category-distribution` - Transaction category breakdown
+- `GET /api/monthly-stats` - Monthly transaction statistics
+
+#### DSA Endpoints
+- `GET /api/dsa/linear-search?id={id}` - Linear search demonstration
+- `GET /api/dsa/dictionary-lookup?id={id}` - Dictionary lookup demonstration
+- `GET /api/dsa/comparison` - Algorithm performance comparison
+
+#### Export Endpoints
+- `GET /api/export/transactions` - Export transactions as JSON/CSV
+- `GET /api/export/analytics` - Export analytics data
+- `GET /api/export/dashboard` - Export dashboard data
+
+### Data Structures & Algorithms
+
+The system implements and compares various algorithms:
+
+#### Search Algorithms
+- **Linear Search**: O(n) time complexity for finding transactions
+- **Dictionary Lookup**: O(1) time complexity using hash tables
+- **Performance Comparison**: Detailed analysis with execution time metrics
+
+#### Sorting Algorithms
+- **Bubble Sort**: O(n²) time complexity
+- **Selection Sort**: O(n²) time complexity
+- **Insertion Sort**: O(n²) time complexity
+- **Merge Sort**: O(n log n) time complexity
+- **Quick Sort**: O(n log n) average case
+
+#### Data Structures
+- **Linked Lists**: Doubly linked list implementation
+- **Stacks**: LIFO data structure using linked lists
+- **Queues**: FIFO data structure using linked lists
+- **Binary Search Trees**: Sorted tree structure for efficient searching
 
 ## Development
 
@@ -235,20 +295,25 @@ We follow PEP 8 Python style guidelines.
 
 ### Database Schema
 
-The system uses a simplified, flat database schema for straightforward data processing:
+The system uses a fully normalized MySQL database schema with 8 core entities:
 
 #### Core Entities
-- **Transactions** - Main transaction records with metadata and processing timestamps
-- **ETL_Logs** - ETL process tracking and monitoring
-- **Category_Stats** - Category-level analytics for dashboard performance
-- **Transactions_Backup** - Data preservation and migration support
+- **Users** - User information and phone numbers
+- **Transactions** - Main transaction records with full metadata
+- **Transaction_Categories** - Transaction type definitions
+- **Tags** - Flexible tagging system for transactions
+- **Transaction_Tags** - Many-to-many relationship junction table
+- **User_Preferences** - User-specific settings and preferences
+- **System_Logs** - ETL process tracking and monitoring
+- **Transaction_Statistics** - Pre-calculated analytics for performance
 
 #### Key Features
-- **Simplified Structure** - Flat, denormalized design for easy data access
+- **Normalized Design** - 3NF compliant schema with proper relationships
 - **Performance Optimization** - Indexes on frequently queried columns
-- **Audit Trail** - Transaction history with processing timestamps
+- **Audit Trail** - Complete transaction history with processing timestamps
 - **Flexible Metadata** - JSON storage for variable transaction attributes
 - **Statistics Pre-calculation** - Dashboard performance through aggregated data
+- **Referential Integrity** - Foreign key constraints ensure data consistency
 
 #### Database Design
 - **ERD Documentation**: See `docs/ERD_Documentation.md` for design rationale
@@ -289,13 +354,37 @@ The database supports transaction processing including:
 - **Web Server Logs**: Check terminal output
 
 
-## Assignment Details
+## Project Development
 
 This project was developed by our team as part of the Enterprise Web Development course. The system demonstrates our skills in:
 
-- Backend data processing and ETL pipelines
-- Database design and management
-- Frontend development and data visualization
-- API design and implementation
-- Full-stack application architecture
-- Entity relationship modeling and database optimization
+### Development Phases
+
+**Phase 1 - Project Setup and Planning**
+- Project structure and organization
+- ETL pipeline design and implementation
+- Database schema planning
+- Frontend dashboard development
+
+**Phase 2 - Database Design and Implementation**
+- Entity Relationship Diagram (ERD) design
+- Normalized MySQL database schema (3NF)
+- JSON data modeling and serialization
+- Database optimization with indexes and constraints
+
+**Phase 3 - API Development and Security**
+- Complete CRUD API implementation
+- Basic Authentication with security analysis
+- Data Structures & Algorithms integration
+- Performance comparison and analysis
+- Comprehensive API documentation
+
+### Technical Skills Demonstrated
+- **Backend Development**: Python ETL pipelines, MySQL database management
+- **API Development**: RESTful endpoints with authentication and validation
+- **Frontend Development**: Interactive dashboard with Chart.js and responsive design
+- **Database Design**: Normalized schema with proper relationships and constraints
+- **Algorithm Implementation**: Search and sorting algorithms with performance analysis
+- **Security**: Authentication implementation and security best practices analysis
+- **Testing**: Comprehensive test suite for all components
+- **Documentation**: Professional documentation and API specifications

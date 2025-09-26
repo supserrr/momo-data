@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # MoMo ETL Pipeline Runner Script
-# This script runs the complete ETL pipeline for processing MoMo XML data
+# Run ETL pipeline for MoMo XML data processing
 
 set -e  # Exit on any error
 

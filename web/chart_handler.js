@@ -1,4 +1,4 @@
-// Enhanced Brutalist Color Palette with more colors for sub-categories
+// Color palette for chart visualization
 const COLORS = {
     yellow: '#ffc947',
     pink: '#ff90e8',
@@ -23,7 +23,7 @@ const COLORS = {
     darkGray: '#333333'
 };
 
-// Brutalist Chart Configuration
+// Chart Configuration
 const BRUTALIST_CONFIG = {
     borderWidth: 4,
     borderRadius: 0,
@@ -32,7 +32,7 @@ const BRUTALIST_CONFIG = {
     textTransform: 'uppercase'
 };
 
-// Enhanced Chart.js Configuration for Brutalist Design
+// Chart.js Configuration
 Chart.defaults.font.family = "'Public Sans', sans-serif";
 Chart.defaults.font.size = 14;
 Chart.defaults.font.weight = 700;
@@ -83,70 +83,14 @@ let reconnectAttempts = 0;
 const maxReconnectAttempts = 5;
 
 function connectWebSocket() {
-    try {
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${window.location.host}/ws`;
-        
-        wsConnection = new WebSocket(wsUrl);
-        
-        wsConnection.onopen = function(event) {
-            console.log('WebSocket connected');
-            reconnectAttempts = 0;
-            updateRealTimeStatus(true);
-            
-            // Subscribe to updates
-            wsConnection.send(JSON.stringify({
-                type: 'subscribe',
-                subscriptions: ['dashboard', 'analytics', 'notifications']
-            }));
-        };
-        
-        wsConnection.onmessage = function(event) {
-            try {
-                const message = JSON.parse(event.data);
-                handleWebSocketMessage(message);
-            } catch (error) {
-                console.error('Error parsing WebSocket message:', error);
-            }
-        };
-        
-        wsConnection.onclose = function(event) {
-            console.log('WebSocket disconnected');
-            updateRealTimeStatus(false);
-            if (reconnectAttempts < maxReconnectAttempts) {
-                setTimeout(() => {
-                    reconnectAttempts++;
-                    console.log(`Attempting to reconnect WebSocket (${reconnectAttempts}/${maxReconnectAttempts})`);
-                    connectWebSocket();
-                }, 3000);
-            }
-        };
-        
-        wsConnection.onerror = function(error) {
-            console.error('WebSocket error:', error);
-        };
-    } catch (error) {
-        console.error('Error connecting to WebSocket:', error);
-    }
+    // WebSocket connection disabled for HTTP server
+    console.log('WebSocket disabled - using HTTP server');
+    updateRealTimeStatus(false);
 }
 
 function handleWebSocketMessage(message) {
-    switch (message.type) {
-        case 'data_update':
-            console.log('Received data update:', message.data_type);
-            if (message.data_type === 'dashboard') {
-                updateDashboardFromWebSocket(message.data);
-            } else if (message.data_type === 'analytics') {
-                updateAnalyticsFromWebSocket(message.data);
-            }
-            break;
-        case 'notification':
-            showNotification(message.message, message.level);
-            break;
-        case 'subscription_confirmed':
-            console.log('WebSocket subscription confirmed:', message.subscriptions);
-            break;
-    }
+    // WebSocket message handling disabled
+    console.log('WebSocket disabled - ignoring message');
 }
 
 function updateDashboardFromWebSocket(data) {
@@ -182,17 +126,17 @@ function showNotification(message, level = 'info') {
     }, 5000);
 }
 
-// Initialize advanced features
+// Initialize additional features
 function initializeAdvancedFeatures() {
-    // Add advanced filtering
-    addAdvancedFilters();
+    // Add filtering controls
+    addFilters();
     
     // Add real-time status indicator
     addRealTimeStatus();
 }
 
-function addAdvancedFilters() {
-    // Add advanced filtering controls
+function addFilters() {
+    // Add filtering controls
     const filterContainer = document.createElement('div');
     filterContainer.className = 'advanced-filters';
     filterContainer.innerHTML = `
@@ -208,8 +152,8 @@ function addAdvancedFilters() {
                 <option value="withdrawal">Withdrawal</option>
                 <option value="transfer">Transfer</option>
             </select>
-            <button onclick="applyAdvancedFilters()" class="btn btn-primary">Apply Filters</button>
-            <button onclick="clearAdvancedFilters()" class="btn btn-secondary">Clear</button>
+            <button onclick="applyFilters()" class="btn btn-primary">Apply Filters</button>
+            <button onclick="clearFilters()" class="btn btn-secondary">Clear</button>
         </div>
     `;
     
@@ -243,7 +187,7 @@ async function exportData(dataType, format) {
     try {
         console.log(`Exporting ${dataType} as ${format}`);
         
-        let url = `http://127.0.0.1:8000/api/advanced/export/${dataType}?format_type=${format}`;
+        let url = `/api/export/${dataType}?format_type=${format}`;
         
         const response = await authenticatedFetch(url);
         
@@ -282,8 +226,8 @@ function downloadBlob(blob, filename) {
     window.URL.revokeObjectURL(url);
 }
 
-// Advanced filtering
-async function applyAdvancedFilters() {
+// Apply filters
+async function applyFilters() {
     try {
         const filters = {
             start_date: document.getElementById('startDate')?.value,
@@ -298,7 +242,7 @@ async function applyAdvancedFilters() {
             if (!filters[key]) delete filters[key];
         });
         
-        console.log('Applying advanced filters:', filters);
+        console.log('Applying filters:', filters);
         
         // Build query string
         const params = new URLSearchParams();
@@ -306,7 +250,7 @@ async function applyAdvancedFilters() {
             params.append(key, filters[key]);
         });
         
-        const url = `http://127.0.0.1:8000/api/advanced/transactions/advanced?${params.toString()}`;
+        const url = `/api/transactions/filter?${params.toString()}`;
         const response = await authenticatedFetch(url);
         
         if (!response.ok) {
@@ -328,12 +272,12 @@ async function applyAdvancedFilters() {
             throw new Error(result.message || 'Filter request failed');
         }
     } catch (error) {
-        console.error('Advanced filter error:', error);
+        console.error('Filter error:', error);
         showNotification(`Filter failed: ${error.message}`, 'error');
     }
 }
 
-function clearAdvancedFilters() {
+function clearFilters() {
     // Clear all filter inputs
     document.getElementById('startDate').value = '';
     document.getElementById('endDate').value = '';
@@ -433,6 +377,8 @@ async function loadDashboardData() {
         currentPage = 1;
         totalPages = Math.ceil(allTransactions.length / pageSize);
         
+        // Initial sort will be applied in updateTransactionsTable
+        
         // Create unified data structure
         const unifiedData = {
             summary: summaryData,
@@ -449,6 +395,9 @@ async function loadDashboardData() {
         updateKeyMetrics(unifiedData);
         updateCharts(unifiedData);
         updateTransactionsTable(); // Call without data to use allTransactions with default sort
+        
+        // Update sort indicators to show current sort state
+        updateSortIndicators();
         
         console.log('Dashboard data loaded successfully with dedicated endpoints approach');
         
@@ -489,12 +438,12 @@ async function loadDashboardData() {
 async function loadSummaryData() {
     try {
         console.log('Fetching summary data...');
-        const response = await authenticatedFetch('http://127.0.0.1:8000/api/dashboard/data');
+        const response = await authenticatedFetch('/api/dashboard-data');
         if (!response.ok) {
             throw new Error(`API error: ${response.status}`);
         }
         const data = await response.json();
-        return data.summary || { total_transactions: 0, total_amount: 0, success_rate: 0 };
+        return data.data?.summary || { total_transactions: 0, total_amount: 0, success_rate: 0 };
     } catch (error) {
         console.warn('Error fetching summary data:', error);
         return { total_transactions: 0, total_amount: 0, success_rate: 0 };
@@ -505,14 +454,14 @@ async function loadSummaryData() {
 async function loadMonthlyStats() {
     try {
         console.log('Fetching monthly stats...');
-        const response = await authenticatedFetch('http://127.0.0.1:8000/api/analytics/monthly');
+        const response = await authenticatedFetch('/api/monthly-stats');
         if (!response.ok) {
             throw new Error(`API error: ${response.status}`);
         }
         const data = await response.json();
-        // The API returns {monthly_stats: [...], hourly_pattern: [...]}
+        // The API returns {data: {monthly_stats: [...]}}
         // We need just the monthly_stats array
-        return data.monthly_stats || [];
+        return data.data?.monthly_stats || [];
     } catch (error) {
         console.warn('Error fetching monthly stats:', error);
         return [];
@@ -523,11 +472,12 @@ async function loadMonthlyStats() {
 async function loadCategoryDistribution() {
     try {
         console.log('Fetching category distribution...');
-        const response = await authenticatedFetch('http://127.0.0.1:8000/api/categories/');
+        const response = await authenticatedFetch('/api/category-distribution');
         if (!response.ok) {
             throw new Error(`API error: ${response.status}`);
         }
-        return await response.json();
+        const data = await response.json();
+        return data.data?.category_distribution || [];
     } catch (error) {
         console.warn('Error fetching category distribution:', error);
         return [];
@@ -538,11 +488,12 @@ async function loadCategoryDistribution() {
 async function loadHourlyPattern() {
     try {
         console.log('Fetching hourly pattern...');
-        const response = await authenticatedFetch('http://127.0.0.1:8000/api/analytics/hourly-pattern');
+        const response = await authenticatedFetch('/api/hourly-pattern');
         if (!response.ok) {
             throw new Error(`API error: ${response.status}`);
         }
-        return await response.json();
+        const data = await response.json();
+        return data.data?.hourly_pattern || [];
     } catch (error) {
         console.warn('Error fetching hourly pattern:', error);
         return [];
@@ -553,11 +504,12 @@ async function loadHourlyPattern() {
 async function loadAmountDistribution() {
     try {
         console.log('Fetching amount distribution...');
-        const response = await authenticatedFetch('http://127.0.0.1:8000/api/analytics/amount-distribution');
+        const response = await authenticatedFetch('/api/amount-distribution');
         if (!response.ok) {
             throw new Error(`API error: ${response.status}`);
         }
-        return await response.json();
+        const data = await response.json();
+        return data.data?.amount_distribution || [];
     } catch (error) {
         console.warn('Error fetching amount distribution:', error);
         return [];
@@ -577,16 +529,17 @@ async function loadTransactionsForTable() {
         while (hasMore && consecutiveErrors < 3) {
             try {
                 console.log(`Fetching transactions: offset=${offset}, limit=${limit}`);
-                const response = await authenticatedFetch(`http://127.0.0.1:8000/api/transactions/?limit=${limit}&offset=${offset}`);
+                const response = await authenticatedFetch(`/api/transactions?limit=${limit}&offset=${offset}`);
                 if (!response.ok) {
                     throw new Error(`API error: ${response.status}`);
                 }
                 
-                const batch = await response.json();
+                const responseData = await response.json();
+                const batch = responseData.data || [];
                 console.log(`Received ${batch.length} transactions in batch`);
                 
                 // Check if we got an error response
-                if (batch.success === false) {
+                if (responseData.success === false) {
                     console.warn(`API returned error at offset ${offset}, stopping pagination`);
                     break;
                 }
@@ -632,18 +585,19 @@ async function loadAllTransactions() {
         while (hasMore && consecutiveErrors < 3) {
             try {
                 console.log(`Fetching transactions: offset=${offset}, limit=${limit}`);
-                const transactionsResponse = await authenticatedFetch(`http://127.0.0.1:8000/api/transactions/?limit=${limit}&offset=${offset}`);
+                const transactionsResponse = await authenticatedFetch(`/api/transactions?limit=${limit}&offset=${offset}`);
                 console.log(`Response status: ${transactionsResponse.status}`);
                 if (!transactionsResponse.ok) {
                     console.warn(`API error at offset ${offset}, stopping pagination`);
                     break;
                 }
                 
-                const batch = await transactionsResponse.json();
+                const responseData = await transactionsResponse.json();
+                const batch = responseData.data || [];
                 console.log(`Received ${batch.length} transactions in batch`);
                 
                 // Check if we got an error response
-                if (batch.success === false) {
+                if (responseData.success === false) {
                     console.warn(`API returned error at offset ${offset}, stopping pagination`);
                     break;
                 }
@@ -680,7 +634,7 @@ async function loadAllTransactions() {
 async function loadTransactionTypesByAmount() {
     try {
         console.log('Fetching transaction types by amount...');
-        const response = await authenticatedFetch('http://127.0.0.1:8000/api/analytics/transaction-types-by-amount');
+        const response = await authenticatedFetch('/api/transaction-types-by-amount');
         console.log(`Response status: ${response.status}`);
         
         if (!response.ok) {
@@ -697,7 +651,7 @@ async function loadTransactionTypesByAmount() {
             return [];
         }
         
-        return data;
+        return data.data?.transaction_types_by_amount || [];
     } catch (error) {
         console.warn('Error fetching transaction types by amount:', error);
         return [];
@@ -776,7 +730,7 @@ function generateUnifiedDataFromTransactions(transactions) {
             .sort(([a], [b]) => a.localeCompare(b))
         .map(([month, data]) => ({ month, ...data }));
     
-    console.log('Generated monthly stats:', monthlyStatsArray);
+    console.log('Monthly stats:', monthlyStatsArray);
     
     // Generate hourly pattern from transactions
     const hourlyPattern = Array.from({length: 24}, (_, i) => ({
@@ -1394,7 +1348,7 @@ function updateHourlyChart(hourlyData) {
         return;
     }
     
-    // Use the 24-hour data from our enhanced parsing
+    // Use the 24-hour data from parsing
     const labels = hourlyData.map(h => `${h.hour}:00`);
     const countData = hourlyData.map(h => h.count || 0);
     const volumeData = hourlyData.map(h => h.volume || 0);
@@ -1626,20 +1580,36 @@ function updateTransactionTypesChart(transactionTypesData) {
     // Filter to only show the specific transaction types requested
     const requestedTypes = ['DEPOSIT', 'TRANSFER', 'PAYMENT', 'RECEIVE', 'AIRTIME', 'DATA_BUNDLE', 'PURCHASE'];
     const filteredData = transactionTypesData.filter(item => 
-        requestedTypes.includes(item.transaction_type)
+        requestedTypes.includes(item.type || item.transaction_type)
     );
     
     // Check for missing transaction types
-    const availableTypes = transactionTypesData.map(item => item.transaction_type);
+    const availableTypes = transactionTypesData.map(item => item.type || item.transaction_type);
     const missingTypes = requestedTypes.filter(type => !availableTypes.includes(type));
     
     // If no data matches, show all available types
-    const dataToShow = filteredData.length > 0 ? filteredData : transactionTypesData;
+    let dataToShow = filteredData.length > 0 ? filteredData : transactionTypesData;
+    
+    // Filter out any items with undefined transaction_type or total_amount
+    dataToShow = dataToShow.filter(item => 
+        item && 
+        (item.type || item.transaction_type) && 
+        typeof (item.type || item.transaction_type) === 'string' && 
+        item.total_amount !== undefined && 
+        item.total_amount !== null
+    );
     
     // Log missing types for debugging
     if (missingTypes.length > 0) {
         console.log('Missing transaction types in database:', missingTypes);
         console.log('Available transaction types:', availableTypes);
+    }
+    
+    // If no valid data after filtering, destroy chart and return
+    if (dataToShow.length === 0) {
+        console.log('No valid transaction type data after filtering');
+        if (charts.transactionTypes) charts.transactionTypes.destroy();
+        return;
     }
     
     // Create dynamic color assignment
@@ -1648,10 +1618,10 @@ function updateTransactionTypesChart(transactionTypesData) {
     );
     
     const chartData = {
-        labels: dataToShow.map(t => t.transaction_type.toUpperCase()),
+        labels: dataToShow.map(t => (t.type || t.transaction_type || 'UNKNOWN').toUpperCase()),
         datasets: [{
             label: 'Total Amount (RWF)',
-            data: dataToShow.map(t => t.total_amount),
+            data: dataToShow.map(t => t.total_amount || 0),
             backgroundColor: dataToShow.map((item, index) => {
                 const colorKey = colorKeys[index % colorKeys.length];
                 // Make small values slightly more vibrant for visibility
@@ -1798,7 +1768,46 @@ function updateTransactionsTable(data) {
     // Apply current sort if we have data and a sort column is set
     if (currentSort.column && sourceData.length > 0) {
         sourceData = [...sourceData].sort((a, b) => {
-            return sortTransactions(a, b, currentSort.column, currentSort.direction);
+            let aValue, bValue;
+            
+            switch (currentSort.column) {
+                case 'date':
+                    aValue = new Date(a.date || a.transaction_date || 0);
+                    bValue = new Date(b.date || b.transaction_date || 0);
+                    break;
+                case 'type':
+                    aValue = (a.transaction_type || a.type || '').toLowerCase();
+                    bValue = (b.transaction_type || b.type || '').toLowerCase();
+                    break;
+                case 'amount':
+                    aValue = parseFloat(a.amount || 0);
+                    bValue = parseFloat(b.amount || 0);
+                    break;
+                case 'direction':
+                    aValue = (a.direction || '').toLowerCase();
+                    bValue = (b.direction || '').toLowerCase();
+                    break;
+                case 'status':
+                    aValue = (a.status || '').toLowerCase();
+                    bValue = (b.status || '').toLowerCase();
+                    break;
+                default:
+                    return 0;
+            }
+            
+            // Handle null/undefined values
+            if (aValue == null) aValue = '';
+            if (bValue == null) bValue = '';
+            
+            let comparison = 0;
+            
+            if (aValue < bValue) {
+                comparison = -1;
+            } else if (aValue > bValue) {
+                comparison = 1;
+            }
+            
+            return currentSort.direction === 'desc' ? -comparison : comparison;
         });
     }
     
@@ -2119,21 +2128,21 @@ async function viewTransactionDetails(transactionId) {
         return;
     }
     
-    // Fetch comprehensive transaction details from the API
+    // Fetch transaction details from the API
     try {
         console.log('Fetching detailed transaction data for ID:', transaction.id);
-        const response = await authenticatedFetch(`http://127.0.0.1:8000/api/transactions/${transaction.id}/details`);
+        const response = await authenticatedFetch(`/api/transactions/${transaction.id}`);
         if (!response.ok) {
             throw new Error(`API error: ${response.status}`);
         }
         const detailedTransaction = await response.json();
-        console.log('Detailed transaction data:', detailedTransaction);
+        console.log('Transaction data:', detailedTransaction);
         
-        // Use the detailed transaction data
-        transaction = detailedTransaction;
+        // Use the transaction data (extract from data wrapper)
+        transaction = detailedTransaction.data || detailedTransaction;
     } catch (error) {
-        console.warn('Error fetching detailed transaction data:', error);
-        // Fall back to the basic transaction data
+        console.warn('Error fetching transaction data:', error);
+        // Fall back to the transaction data
     }
     
     // Determine transaction type and create appropriate view
@@ -2151,7 +2160,7 @@ async function viewTransactionDetails(transactionId) {
     const modal = document.createElement('div');
     modal.className = 'transaction-modal';
     
-    // Build content dynamically based on available data
+    // Build content based on available data
     let content = `
         <div class="modal-content">
             <div class="modal-header">
@@ -2336,7 +2345,7 @@ async function viewTransactionDetails(transactionId) {
                         <span>${formatDate(date)}</span>
                     </div>`;
     
-    // Only show status if available
+    // Show status if available
     const status = metadata.status || transaction.status;
     if (status) {
         content += `
@@ -2346,7 +2355,7 @@ async function viewTransactionDetails(transactionId) {
                     </div>`;
     }
     
-    // Only show confidence score if available
+    // Show confidence score if available
     const confidenceScore = metadata.confidence_score || transaction.confidence_score;
     if (confidenceScore) {
         content += `
@@ -2356,7 +2365,7 @@ async function viewTransactionDetails(transactionId) {
                     </div>`;
     }
     
-    // Only show reference if available and not duplicate of an ID
+    // Show reference if available and not duplicate of an ID
     // For payment transactions, reference is usually the same as transaction_id, so skip it
     if (reference && !seenValues.has(reference) && transactionType !== 'PAYMENT') {
         content += `
@@ -2366,8 +2375,8 @@ async function viewTransactionDetails(transactionId) {
                     </div>`;
     }
     
-    // Always show original message if available (check multiple possible field names)
-    // Handle empty strings, null, undefined, and "null" string values properly
+    // Show original message if available (check multiple possible field names)
+    // Handle empty strings, null, undefined, and "null" string values
     const getValidMessage = (field) => {
         if (!field || field === 'null' || field === null || field === undefined) return null;
         const trimmed = field.trim();
@@ -2380,7 +2389,7 @@ async function viewTransactionDetails(transactionId) {
                            getValidMessage(transaction.raw_data) || 
                            getValidMessage(transaction.raw_sms_data);
     
-    // Log available fields for troubleshooting
+    // Log available fields for debugging
     console.log('Transaction fields for original message:', {
         original_message: transaction.original_message,
         original_data: transaction.original_data,
@@ -2610,58 +2619,8 @@ function updateSortIndicators() {
 }
 
 function sortTransactions() {
-    if (!currentSort.column) return;
-    
-    const dataToSort = filteredTransactions.length > 0 ? filteredTransactions : allTransactions;
-    
-    dataToSort.sort((a, b) => {
-        let aValue, bValue;
-        
-        switch (currentSort.column) {
-            case 'date':
-                aValue = new Date(a.date || a.transaction_date || 0);
-                bValue = new Date(b.date || b.transaction_date || 0);
-                break;
-            case 'type':
-                aValue = (a.transaction_type || a.type || '').toLowerCase();
-                bValue = (b.transaction_type || b.type || '').toLowerCase();
-                break;
-            case 'amount':
-                aValue = parseFloat(a.amount || 0);
-                bValue = parseFloat(b.amount || 0);
-                break;
-            case 'direction':
-                aValue = (a.direction || '').toLowerCase();
-                bValue = (b.direction || '').toLowerCase();
-                break;
-            case 'status':
-                aValue = (a.status || '').toLowerCase();
-                bValue = (b.status || '').toLowerCase();
-                break;
-            default:
-                return 0;
-        }
-        
-        // Handle null/undefined values
-        if (aValue == null) aValue = '';
-        if (bValue == null) bValue = '';
-        
-        let comparison = 0;
-        
-        if (aValue < bValue) {
-            comparison = -1;
-        } else if (aValue > bValue) {
-            comparison = 1;
-        }
-        
-        return currentSort.direction === 'desc' ? -comparison : comparison;
-    });
-    
-    // Update filteredTransactions if we sorted it
-    if (filteredTransactions.length > 0) {
-        filteredTransactions = [...dataToSort];
-    } else {
-        allTransactions = [...dataToSort];
-    }
+    // This function is now just a placeholder - sorting is done in updateTransactionsTable
+    // We don't modify the original data arrays to preserve data integrity
+    console.log(`Sort state updated: ${currentSort.column} ${currentSort.direction}`);
 }
 

@@ -1,5 +1,5 @@
 /* MoMo Dashboard - NeoBrutalism Custom Styles */
-/* Enhanced brutalist design with NeoBrutalismCSS framework integration */
+/* Brutalist design with NeoBrutalismCSS framework integration */
 
 :root {
     /* Brutalist Color Palette */
@@ -36,7 +36,7 @@
     --border-thick: 8px solid var(--brutal-black);
 }
 
-/* Enhanced Brutalist Base Styles */
+/* Brutalist Base Styles */
 * {
     box-sizing: border-box;
 }
@@ -138,7 +138,7 @@ h1, h2, h3, h4, h5, h6 {
     z-index: 10;
 }
 
-/* Enhanced Brutalist Animations */
+/* Brutalist Animations */
 @keyframes slideIn {
     from {
         opacity: 0;
@@ -215,7 +215,7 @@ h1, h2, h3, h4, h5, h6 {
     animation: brutalGlow 2s infinite;
 }
 
-/* Enhanced Responsive Utilities */
+/* Responsive Utilities */
 /* Mobile-first responsive design with NeoBrutalism utilities */
 
 /* Chart Container Responsive Enhancements */
@@ -1173,7 +1173,7 @@ h1, h2, h3, h4, h5, h6 {
     opacity: 0.8;
 }
 
-/* Enhanced Category Badge Colors */
+/* Category Badge Colors */
 .category-transfer-in {
     background: var(--brutal-green);
     color: var(--brutal-black);
@@ -1442,7 +1442,7 @@ footer a {
     }
 }
 
-/* Enhanced Mobile Navigation */
+/* Mobile Navigation */
 @media (max-width: 576px) {
     .nb-navbar-nav {
         flex-direction: column;
@@ -1464,7 +1464,7 @@ footer a {
     }
 }
 
-/* Enhanced Card Responsiveness */
+/* Card Responsiveness */
 @media (max-width: 576px) {
     .nb-card {
         margin-bottom: 1rem;
@@ -1637,7 +1637,7 @@ textarea:focus {
     top: 0;
 }
 
-/* Enhanced Brutalist Card Styles */
+/* Brutalist Card Styles */
 .nb-card {
     transition: all 0.3s ease;
     cursor: pointer;
@@ -1670,7 +1670,7 @@ textarea:focus {
     box-shadow: var(--shadow-medium);
 }
 
-/* Enhanced Button Styles */
+/* Button Styles */
 .brutal-btn {
     display: inline-block;
     padding: 1rem 2rem;
@@ -1994,7 +1994,7 @@ textarea:focus {
     }
 }
 
-/* Enhanced Mobile Chart Responsiveness */
+/* Mobile Chart Responsiveness */
 @media (max-width: 768px) {
     .chart-container {
         height: 300px;

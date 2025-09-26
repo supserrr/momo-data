@@ -1,6 +1,6 @@
 """
-Enhanced MTN MobileMoney Parser
-Based on detailed message type analysis
+MTN MobileMoney SMS Parser
+Parses and categorizes mobile money transaction messages
 """
 
 import re
@@ -37,8 +37,8 @@ class ParsedTransaction:
     original_message: str = ""
     confidence: float = 0.0
 
-class EnhancedMTNParser:
-    """Enhanced parser for MTN MobileMoney messages with detailed categorization."""
+class MTNParser:
+    """Parser for MTN MobileMoney messages with transaction categorization."""
     
     def __init__(self):
         self.parsed_count = 0
@@ -362,7 +362,7 @@ class EnhancedMTNParser:
             
             # Analyze message content to determine specific type
             if "bank deposit" in message_lower:
-                # This should have been caught by DEPOSIT_AGENT, but handle it here too
+                # Handle additional deposit cases
                 return self._parse_deposit_agent(message, timestamp)
             elif "cash deposit" in message_lower:
                 # Cash deposit from agent

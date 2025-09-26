@@ -16,7 +16,7 @@ from typing import List, Dict, Any
 sys.path.append(str(Path(__file__).parent.parent))
 
 from etl.config import XML_INPUT_FILE, ETL_LOG_FILE, LOG_LEVEL
-from etl.parser import EnhancedMTNParser, ParsedTransaction
+from etl.parser import MTNParser, ParsedTransaction
 from etl.loader import MySQLDatabaseLoader
 from etl.file_tracker import FileTracker
 
@@ -36,15 +36,15 @@ def setup_logging(log_file: Path = ETL_LOG_FILE, level: str = LOG_LEVEL):
     )
     
     logger = logging.getLogger(__name__)
-    logger.info(f"Enhanced ETL process started - Log level: {level}")
+    logger.info(f"ETL process started - Log level: {level}")
     return logger
 
-def parse_xml_with_enhanced_parser(xml_file: Path) -> List[ParsedTransaction]:
-    """Parse XML file using the enhanced parser."""
+def parse_xml_with_parser(xml_file: Path) -> List[ParsedTransaction]:
+    """Parse XML file using the MTN parser."""
     import xml.etree.ElementTree as ET
     
     logger = logging.getLogger(__name__)
-    parser = EnhancedMTNParser()
+    parser = MTNParser()
     transactions = []
     
     try:
@@ -196,9 +196,9 @@ def run_enhanced_etl_pipeline(xml_file: Path, export_json: bool = True) -> dict:
         
         logger.info(f"Processing file: {xml_file.name}")
         
-        # Step 1: Parse XML with enhanced parser
-        logger.info("Step 1: Parsing XML with enhanced message type detection...")
-        parsed_transactions = parse_xml_with_enhanced_parser(xml_file)
+        # Step 1: Parse XML with parser
+        logger.info("Step 1: Parsing XML with message type detection...")
+        parsed_transactions = parse_xml_with_parser(xml_file)
         
         if not parsed_transactions:
             logger.warning("No transactions found in XML file")
@@ -334,7 +334,7 @@ def main():
         if args.dry_run or args.analyze:
             logger.info("Running in analysis mode...")
             # Parse and analyze without loading to database
-            parsed_transactions = parse_xml_with_enhanced_parser(args.xml)
+            parsed_transactions = parse_xml_with_parser(args.xml)
             
             if not parsed_transactions:
                 logger.warning("No transactions found")

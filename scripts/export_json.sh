@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # MoMo Dashboard JSON Export Script
-# This script rebuilds and exports the dashboard JSON data
+# Export dashboard JSON data
 
 set -e  # Exit on any error
 
